@@ -5,7 +5,7 @@
 
 This is a plugin template for [Zotero](https://www.zotero.org/).
 
-[English](README.md) | [简体中文](doc/README-zhCN.md) | [Français](doc/README-frFR.md)
+[English](doc/README.md) | [简体中文](doc/README-zhCN.md) | [Français](doc/README-frFR.md)
 
 - Documentation for plugins development
   - [📖 Plugin Development Documentation](https://zotero-chinese.com/plugin-dev-guide/) (Chinese, not yet complete)

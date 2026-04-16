@@ -155,11 +155,19 @@ export class UIExampleFactory {
       "item",
       {
         tag: "menu",
-        label: getString("menupopup-label"),
+        // label: getString("menupopup-label"),
+        label: "Open in Semble",
         children: [
           {
             tag: "menuitem",
-            label: getString("menuitem-submenulabel"),
+            // label: getString("menuitem-submenulabel"),
+            label: "Open as URL",
+            oncommand: "alert('Hello World! Sub Menuitem.')",
+          },
+          {
+            tag: "menuitem",
+            // label: getString("menuitem-submenulabel"),
+            label: "Open as DOI",
             oncommand: "alert('Hello World! Sub Menuitem.')",
           },
         ],
