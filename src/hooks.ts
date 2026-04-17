@@ -1,14 +1,3 @@
-import {
-  BasicExampleFactory,
-  HelperExampleFactory,
-  KeyExampleFactory,
-  PromptExampleFactory,
-  UIExampleFactory,
-} from "./modules/examples";
-import { getString, initLocale } from "./utils/locale";
-import { registerPrefsScripts } from "./modules/preferenceScript";
-import { createZToolkit } from "./utils/ztoolkit";
-
 async function onStartup() {
   await Promise.all([
     Zotero.initializationPromise,
@@ -16,23 +5,7 @@ async function onStartup() {
     Zotero.uiReadyPromise,
   ]);
 
-  initLocale();
-
-  BasicExampleFactory.registerPrefs();
-
-  BasicExampleFactory.registerNotifier();
-
-  KeyExampleFactory.registerShortcuts();
-
-  await UIExampleFactory.registerExtraColumn();
-
-  await UIExampleFactory.registerExtraColumnWithCustomCell();
-
-  UIExampleFactory.registerItemPaneCustomInfoRow();
-
-  UIExampleFactory.registerItemPaneSection();
-
-  UIExampleFactory.registerReaderItemPaneSection();
+  // initLocale();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -44,63 +17,67 @@ async function onStartup() {
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
-  // Create ztoolkit for every window
-  addon.data.ztoolkit = createZToolkit();
+  ztoolkit.Menu.register("item", {
+    tag: "menu",
+    // label: getString("menupopup-label"),
+    label: "Open in Semble",
+    isDisabled: () => {
+      const pane = ztoolkit.getGlobal("ZoteroPane");
+      return pane.getSelectedItems().length !== 1;
+    },
+    children: [
+      {
+        tag: "menuitem",
+        // label: getString("menuitem-submenulabel"),
+        label: "Open as URL",
+        commandListener: (ev) => {
+          const pane = ztoolkit.getGlobal("ZoteroPane");
+          const selectedItems = pane.getSelectedItems();
 
-  win.MozXULElement.insertFTLIfNeeded(
-    `${addon.data.config.addonRef}-mainWindow.ftl`,
-  );
+          if (selectedItems.length !== 1) return;
 
-  const popupWin = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
-    closeOnClick: true,
-    closeTime: -1,
-  })
-    .createLine({
-      text: getString("startup-begin"),
-      type: "default",
-      progress: 0,
-    })
-    .show();
+          const [item] = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
 
-  await Zotero.Promise.delay(1000);
-  popupWin.changeLine({
-    progress: 30,
-    text: `[30%] ${getString("startup-begin")}`,
+          if (item === undefined) return;
+
+          const url = new URL("https://semble.so/url");
+          url.searchParams.set("id", item.getField("url"));
+          ztoolkit.log(url.toString());
+
+          pane.loadURI(url.toString());
+        },
+        isDisabled: (elem: XULMenuItemElement, ev: Event) => {
+          const [item] = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+
+          if (item === undefined) return;
+
+          const url = URL.parse(item.getField("url"));
+          return url === null;
+        },
+      },
+      {
+        tag: "menuitem",
+        // label: getString("menuitem-submenulabel"),
+        label: "Open as DOI",
+        isDisabled: (elem: XULMenuItemElement, ev: Event) => {
+          const [item] = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+
+          if (item === undefined) return;
+
+          return item.getField("DOI") !== "";
+        },
+      },
+    ],
+    icon: `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`,
   });
-
-  UIExampleFactory.registerStyleSheet(win);
-
-  // UIExampleFactory.registerRightClickMenuItem();
-
-  UIExampleFactory.registerRightClickMenuPopup(win);
-
-  UIExampleFactory.registerWindowMenuWithSeparator();
-
-  PromptExampleFactory.registerNormalCommandExample();
-
-  PromptExampleFactory.registerAnonymousCommandExample(win);
-
-  PromptExampleFactory.registerConditionalCommandExample();
-
-  await Zotero.Promise.delay(1000);
-
-  popupWin.changeLine({
-    progress: 100,
-    text: `[100%] ${getString("startup-finish")}`,
-  });
-  popupWin.startCloseTimer(5000);
-
-  addon.hooks.onDialogEvents("dialogExample");
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
   ztoolkit.unregisterAll();
-  addon.data.dialog?.window?.close();
 }
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
-  addon.data.dialog?.window?.close();
   // Remove addon object
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
@@ -119,15 +96,6 @@ async function onNotify(
 ) {
   // You can add your code to the corresponding notify type
   ztoolkit.log("notify", event, type, ids, extraData);
-  if (
-    event == "select" &&
-    type == "tab" &&
-    extraData[ids[0]].type == "reader"
-  ) {
-    BasicExampleFactory.exampleNotifierCallback();
-  } else {
-    return;
-  }
 }
 
 /**
@@ -136,50 +104,11 @@ async function onNotify(
  * @param type event type
  * @param data event data
  */
-async function onPrefsEvent(type: string, data: { [key: string]: any }) {
-  switch (type) {
-    case "load":
-      registerPrefsScripts(data.window);
-      break;
-    default:
-      return;
-  }
-}
+async function onPrefsEvent(type: string, data: { [key: string]: any }) {}
 
-function onShortcuts(type: string) {
-  switch (type) {
-    case "larger":
-      KeyExampleFactory.exampleShortcutLargerCallback();
-      break;
-    case "smaller":
-      KeyExampleFactory.exampleShortcutSmallerCallback();
-      break;
-    default:
-      break;
-  }
-}
+function onShortcuts(type: string) {}
 
-function onDialogEvents(type: string) {
-  switch (type) {
-    case "dialogExample":
-      HelperExampleFactory.dialogExample();
-      break;
-    case "clipboardExample":
-      HelperExampleFactory.clipboardExample();
-      break;
-    case "filePickerExample":
-      HelperExampleFactory.filePickerExample();
-      break;
-    case "progressWindowExample":
-      HelperExampleFactory.progressWindowExample();
-      break;
-    case "vtableExample":
-      HelperExampleFactory.vtableExample();
-      break;
-    default:
-      break;
-  }
-}
+function onDialogEvents(type: string) {}
 
 // Add your hooks here. For element click, etc.
 // Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
