@@ -138,7 +138,7 @@ export class UIExampleFactory {
 
   @example
   static registerRightClickMenuItem() {
-    const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon@0.5x.png`;
+    const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`;
     // item menuitem with icon
     ztoolkit.Menu.register("item", {
       tag: "menuitem",
@@ -151,32 +151,26 @@ export class UIExampleFactory {
 
   @example
   static registerRightClickMenuPopup(win: Window) {
-    ztoolkit.Menu.register(
-      "item",
-      {
-        tag: "menu",
-        // label: getString("menupopup-label"),
-        label: "Open in Semble",
-        children: [
-          {
-            tag: "menuitem",
-            // label: getString("menuitem-submenulabel"),
-            label: "Open as URL",
-            oncommand: "alert('Hello World! Sub Menuitem.')",
-          },
-          {
-            tag: "menuitem",
-            // label: getString("menuitem-submenulabel"),
-            label: "Open as DOI",
-            oncommand: "alert('Hello World! Sub Menuitem.')",
-          },
-        ],
-      },
-      "before",
-      win.document?.querySelector(
-        "#zotero-itemmenu-addontemplate-test",
-      ) as XUL.MenuItem,
-    );
+    ztoolkit.Menu.register("item", {
+      tag: "menu",
+      // label: getString("menupopup-label"),
+      label: "Open in Semble",
+      children: [
+        {
+          tag: "menuitem",
+          // label: getString("menuitem-submenulabel"),
+          label: "Open as URL",
+          oncommand: "alert('Hello World! Sub Menuitem.')",
+        },
+        {
+          tag: "menuitem",
+          // label: getString("menuitem-submenulabel"),
+          label: "Open as DOI",
+          oncommand: "alert('Hello World! Sub Menuitem.')",
+        },
+      ],
+      icon: `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`,
+    });
   }
 
   @example
