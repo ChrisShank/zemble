@@ -8,7 +8,7 @@
 2. Click on the `zemble.xpi` file to download it to your computer.
 3. In Zotero, click `Tools > Plugins > "..." menu > "Open Plugin from File"` and open the zemble.xpi file that you just downloaded.
 
-![installation video](docs/installation.mp4)
+<video src="docs/installation.mp4" width="300" controls></video>
 
 ## Functionality
 
