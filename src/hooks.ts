@@ -19,52 +19,62 @@ async function onStartup() {
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   ztoolkit.Menu.register("item", {
     tag: "menu",
-    // label: getString("menupopup-label"),
     label: "Open in Semble",
-    isDisabled: () => {
-      const pane = ztoolkit.getGlobal("ZoteroPane");
-      return pane.getSelectedItems().length !== 1;
-    },
     children: [
       {
         tag: "menuitem",
-        // label: getString("menuitem-submenulabel"),
         label: "Open as URL",
-        commandListener: (ev) => {
+        isDisabled: () => {
+          const items = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+          return items.every((item) => item.getField("url") === "");
+        },
+        commandListener: () => {
           const pane = ztoolkit.getGlobal("ZoteroPane");
           const selectedItems = pane.getSelectedItems();
 
-          if (selectedItems.length !== 1) return;
+          const urls: string[] = [];
 
-          const [item] = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+          for (const item of selectedItems) {
+            const urlString = item.getField("url");
 
-          if (item === undefined) return;
+            if (urlString !== "") {
+              const url = new URL("https://semble.so/url");
+              url.searchParams.set("id", item.getField("url"));
 
-          const url = new URL("https://semble.so/url");
-          url.searchParams.set("id", item.getField("url"));
-          ztoolkit.log(url.toString());
+              urls.push(url.toString());
+            }
+          }
 
-          pane.loadURI(url.toString());
-        },
-        isDisabled: (elem: XULMenuItemElement, ev: Event) => {
-          const [item] = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
-
-          if (item === undefined) return;
-
-          const url = URL.parse(item.getField("url"));
-          return url === null;
+          ztoolkit.log(urls);
+          pane.loadURI(urls);
         },
       },
       {
         tag: "menuitem",
-        // label: getString("menuitem-submenulabel"),
         label: "Open as DOI",
-        isDisabled: (elem: XULMenuItemElement, ev: Event) => {
-          const [item] = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+        isDisabled: () => {
+          const items = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+          return items.every((item) => item.getField("DOI") === "");
+        },
+        commandListener: () => {
+          const pane = ztoolkit.getGlobal("ZoteroPane");
+          const selectedItems = pane.getSelectedItems();
 
-          if (item === undefined) return;
+          const urls: string[] = [];
 
-          return item.getField("DOI") !== "";
+          for (const item of selectedItems) {
+            const doi = item.getField("DOI");
+
+            if (doi !== "") {
+              const url = new URL("https://semble.so/url");
+              url.searchParams.set("id", "https://www.doi.org/" + doi);
+
+              urls.push(url.toString());
+            }
+          }
+
+          ztoolkit.log(urls);
+          pane.loadURI(urls);
         },
       },
     ],
