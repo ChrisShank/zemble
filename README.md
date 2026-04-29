@@ -13,7 +13,7 @@
 ## Functionality
 
 - Open items in Zotero directly in Semble.
-  - Right-clicking on selected items in Zotero will now have an option to open URLs and DOIs in Semble in your browser. If multiple items are selected they will each load in separate browser tabs.
+  - Right-clicking on selected items in Zotero will now have an option to open URLs and DOIs in Semble in your browser. If multiple items are selected they will each load in separate browser tabs. ![Example showing the options to open in Semble when right-clicking on items](docs/right-click.png)
 
 ## Contributing
 
