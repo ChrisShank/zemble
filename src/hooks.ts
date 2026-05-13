@@ -1,3 +1,55 @@
+class FetchCache<Data> {
+  cache = new Map<string, Data>();
+
+  flushing = false;
+  promiseQueue = new Map<string, Promise<Data>>();
+  fetcher: (key: string) => Promise<Data>;
+
+  constructor(fetcher: (key: string) => Promise<Data>) {
+    this.fetcher = fetcher;
+  }
+
+  get(key: string) {
+    const data = this.cache.get(key);
+    if (data !== undefined) return data;
+
+    if (!this.promiseQueue.has(key)) {
+      this.promiseQueue.set(key, this.fetcher(key));
+
+      if (!this.flushing) {
+        this.flushing = true;
+        setTimeout(this.refresh, 100);
+      }
+    }
+
+    return undefined;
+  }
+
+  refresh = async () => {
+    const promises = Array.from(this.promiseQueue.entries()).map(
+      ([key, promise]) => promise.then((d) => [key, d] as const),
+    );
+    this.promiseQueue.clear();
+    this.flushing = false;
+    const results = await Promise.allSettled(promises);
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        this.cache.set(result.value[0], result.value[1]);
+      }
+    }
+
+    Zotero.Notifier.trigger("refresh", "itemtree", []);
+  };
+}
+
+let favicon;
+const statCache = new FetchCache((url: string) =>
+  fetch(
+    `https://api.semble.so/api/cards/metadata?url=${url}&includeStats=true`,
+  ).then((r) => r.json() as Record<string, any>),
+);
+
 async function onStartup() {
   await Promise.all([
     Zotero.initializationPromise,
@@ -6,6 +58,7 @@ async function onStartup() {
   ]);
 
   // initLocale();
+  favicon = `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`;
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -14,9 +67,7 @@ async function onStartup() {
   // Mark initialized as true to confirm plugin loading status
   // outside of the plugin (e.g. scaffold testing process)
   addon.data.initialized = true;
-}
 
-async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   ztoolkit.Menu.register("item", {
     tag: "menu",
     label: "Open in Semble",
@@ -39,13 +90,12 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
             if (urlString !== "") {
               const url = new URL("https://semble.so/url");
-              url.searchParams.set("id", item.getField("url"));
+              url.searchParams.set("id", urlString);
 
               urls.push(url.toString());
             }
           }
 
-          ztoolkit.log(urls);
           pane.loadURI(urls);
         },
       },
@@ -73,14 +123,73 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
             }
           }
 
-          ztoolkit.log(urls);
           pane.loadURI(urls);
         },
       },
     ],
-    icon: `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`,
+    icon: favicon,
+  });
+
+  await Zotero.ItemTreeManager.registerColumn({
+    pluginID: addon.data.config.addonID,
+    dataKey: "semble-cards",
+    label: "Semble Cards Saved",
+    htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Cards Saved</span>`,
+    dataProvider: (item: Zotero.Item) => {
+      const url = item.getField("url") || item.getField("DOI");
+      const data = statCache.get(url);
+      const count = data?.stats?.libraryCount;
+      return count ?? "-";
+    },
+  });
+
+  await Zotero.ItemTreeManager.registerColumn({
+    pluginID: addon.data.config.addonID,
+    dataKey: "semble-collections",
+    label: "Semble Collections",
+    htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Collections</span>`,
+    dataProvider: (item: Zotero.Item) => {
+      const url = item.getField("url") || item.getField("DOI");
+      const data = statCache.get(url);
+      const count = data?.stats?.collectionCount;
+      return count ?? "-";
+    },
+  });
+
+  await Zotero.ItemTreeManager.registerColumn({
+    pluginID: addon.data.config.addonID,
+    dataKey: "semble-connections",
+    label: "Semble Connections",
+    htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Connections</span>`,
+    dataProvider: (item: Zotero.Item) => {
+      const url = item.getField("url") || item.getField("DOI");
+      const data = statCache.get(url);
+      const count = data?.stats?.connections?.all?.total;
+      return count ?? "-";
+    },
+    // renderCell(index, data = "", column, isFirstColumn, doc) {
+    //   const [count, url] = data.split(",");
+    //   if (count === undefined || count === "0") {
+    //     const span = doc.createElement("span");
+    //     span.textContent = "--";
+    //     return span;
+    //   }
+    //   const a = doc.createElement("a");
+    //   a.textContent = count;
+    //   // a.href = ;
+    //   a.onclick = (e) => {
+    //     e.preventDefault();
+    //     e.stopPropagation();
+    //     ztoolkit
+    //       .getGlobal("ZoteroPane")
+    //       .loadURI([`https://semble.so/url?id=${url}`]);
+    //   };
+    //   return a;
+    // },
   });
 }
+
+async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {}
 
 async function onMainWindowUnload(win: Window): Promise<void> {
   ztoolkit.unregisterAll();
@@ -96,7 +205,7 @@ function onShutdown(): void {
 
 /**
  * This function is just an example of dispatcher for Notify events.
- * Any operations should be placed in a function to keep this funcion clear.
+ * Any operations should be placed in a function to keep this function clear.
  */
 async function onNotify(
   event: string,
@@ -110,7 +219,7 @@ async function onNotify(
 
 /**
  * This function is just an example of dispatcher for Preference UI events.
- * Any operations should be placed in a function to keep this funcion clear.
+ * Any operations should be placed in a function to keep this function clear.
  * @param type event type
  * @param data event data
  */

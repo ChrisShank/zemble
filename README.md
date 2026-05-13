@@ -6,7 +6,7 @@
 
 1. Go to the [latest release](https://github.com/ChrisShank/zemble/releases/latest) of the plugin.
 2. Click on the `zemble.xpi` file to download it to your computer.
-3. In Zotero, click `Tools > Plugins > "..." menu > "Open Plugin from File"` and open the zemble.xpi file that you just downloaded.
+3. In Zotero, click `Tools > Plugins > "..." menu > "Open Plugin from File"` and open the `zemble.xpi` file that you just downloaded.
 
 <video src="https://github.com/user-attachments/assets/6b431fb2-c104-4034-bb7c-6cd0b0ca2e79" width="300" controls></video>
 
