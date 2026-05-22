@@ -1,5 +1,5 @@
 class FetchCache<Data> {
-  cache = new Map<string, Data>();
+  cache = new Map<string, Data | undefined>();
 
   flushing = false;
   promiseQueue = new Map<string, Promise<Data>>();
@@ -11,6 +11,8 @@ class FetchCache<Data> {
 
   get(key: string) {
     const data = this.cache.get(key);
+    if (!key) return undefined;
+
     if (data !== undefined) return data;
 
     if (!this.promiseQueue.has(key)) {
@@ -27,7 +29,13 @@ class FetchCache<Data> {
 
   refresh = async () => {
     const promises = Array.from(this.promiseQueue.entries()).map(
-      ([key, promise]) => promise.then((d) => [key, d] as const),
+      ([key, promise]) =>
+        promise
+          .then((d) => [key, d] as const)
+          .catch((e) => {
+            ztoolkit.log(e);
+            return [key, undefined] as const;
+          }),
     );
     this.promiseQueue.clear();
     this.flushing = false;
@@ -36,6 +44,8 @@ class FetchCache<Data> {
     for (const result of results) {
       if (result.status === "fulfilled") {
         this.cache.set(result.value[0], result.value[1]);
+      } else {
+        this.cache.set(result.reason[0], undefined);
       }
     }
 
@@ -48,6 +58,12 @@ const statCache = new FetchCache((url: string) =>
   fetch(
     `https://api.semble.so/api/cards/metadata?url=${url}&includeStats=true`,
   ).then((r) => r.json() as Record<string, any>),
+);
+
+const notesCache = new FetchCache((url: string) =>
+  fetch(`https://api.semble.so/api/cards/notes/url?url=${url}`).then(
+    (r) => r.json() as Record<string, any>,
+  ),
 );
 
 async function onStartup() {
@@ -139,7 +155,7 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = statCache.get(url);
       const count = data?.stats?.libraryCount;
-      return count ?? "-";
+      return count || "";
     },
   });
 
@@ -152,7 +168,7 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = statCache.get(url);
       const count = data?.stats?.collectionCount;
-      return count ?? "-";
+      return count || "";
     },
   });
 
@@ -165,7 +181,7 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = statCache.get(url);
       const count = data?.stats?.connections?.all?.total;
-      return count ?? "-";
+      return count || "";
     },
     // renderCell(index, data = "", column, isFirstColumn, doc) {
     //   const [count, url] = data.split(",");
@@ -186,6 +202,19 @@ async function onStartup() {
     //   };
     //   return a;
     // },
+  });
+
+  await Zotero.ItemTreeManager.registerColumn({
+    pluginID: addon.data.config.addonID,
+    dataKey: "semble-notes",
+    label: "Semble Notes",
+    htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Notes</span>`,
+    dataProvider: (item: Zotero.Item) => {
+      const url = item.getField("url") || item.getField("DOI");
+      const data = notesCache.get(url);
+      const count = data?.notes.length;
+      return count || "";
+    },
   });
 }
 
