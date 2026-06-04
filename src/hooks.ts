@@ -155,7 +155,26 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = statCache.get(url);
       const count = data?.stats?.libraryCount;
-      return count || "";
+      return count ? `${count},${url}` : "";
+    },
+    renderCell(index, data = "", column, isFirstColumn, doc) {
+      const [count, url] = data.split(",");
+      const a = doc.createElement("a");
+
+      if (count !== undefined && count !== "0") {
+        a.textContent = count;
+        a.href = "#";
+        a.className = `cell ${column.className}`;
+        a.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ztoolkit
+            .getGlobal("ZoteroPane")
+            .loadURI([`https://semble.so/url?id=${url}`]);
+        };
+      }
+
+      return a;
     },
   });
 
@@ -168,7 +187,27 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = statCache.get(url);
       const count = data?.stats?.collectionCount;
-      return count || "";
+      return count ? `${count},${url}` : "";
+    },
+    renderCell(index, data = "", column, isFirstColumn, doc) {
+      const [count, url] = data.split(",");
+      const a = doc.createElement("a");
+
+      if (count !== undefined && count !== "0") {
+        a.textContent = count;
+        a.href = "#";
+        a.className = `cell ${column.className}`;
+
+        a.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ztoolkit
+            .getGlobal("ZoteroPane")
+            .loadURI([`https://semble.so/url?id=${url}&sembleTab=collections`]);
+        };
+      }
+
+      return a;
     },
   });
 
@@ -181,27 +220,27 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = statCache.get(url);
       const count = data?.stats?.connections?.all?.total;
-      return count || "";
+      return count ? `${count},${url}` : "";
     },
-    // renderCell(index, data = "", column, isFirstColumn, doc) {
-    //   const [count, url] = data.split(",");
-    //   if (count === undefined || count === "0") {
-    //     const span = doc.createElement("span");
-    //     span.textContent = "--";
-    //     return span;
-    //   }
-    //   const a = doc.createElement("a");
-    //   a.textContent = count;
-    //   // a.href = ;
-    //   a.onclick = (e) => {
-    //     e.preventDefault();
-    //     e.stopPropagation();
-    //     ztoolkit
-    //       .getGlobal("ZoteroPane")
-    //       .loadURI([`https://semble.so/url?id=${url}`]);
-    //   };
-    //   return a;
-    // },
+    renderCell(index, data = "", column, isFirstColumn, doc) {
+      const [count, url] = data.split(",");
+      const a = doc.createElement("a");
+
+      if (count !== undefined && count !== "0") {
+        a.textContent = count;
+        a.href = "#";
+        a.className = `cell ${column.className}`;
+        a.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ztoolkit
+            .getGlobal("ZoteroPane")
+            .loadURI([`https://semble.so/url?id=${url}&sembleTab=connections`]);
+        };
+      }
+
+      return a;
+    },
   });
 
   await Zotero.ItemTreeManager.registerColumn({
@@ -213,12 +252,41 @@ async function onStartup() {
       const url = item.getField("url") || item.getField("DOI");
       const data = notesCache.get(url);
       const count = data?.notes.length;
-      return count || "";
+      return count ? `${count},${url}` : "";
+    },
+    renderCell(index, data = "", column, isFirstColumn, doc) {
+      const [count, url] = data.split(",");
+      const a = doc.createElement("a");
+
+      if (count !== undefined && count !== "0") {
+        a.textContent = count;
+        a.href = "#";
+        a.className = `cell ${column.className}`;
+        a.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ztoolkit
+            .getGlobal("ZoteroPane")
+            .loadURI([`https://semble.so/url?id=${url}&sembleTab=notes`]);
+        };
+      }
+
+      return a;
     },
   });
 }
 
-async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {}
+async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
+  const doc = win.document;
+  const styles = ztoolkit.UI.createElement(doc, "link", {
+    properties: {
+      type: "text/css",
+      rel: "stylesheet",
+      href: `chrome://${addon.data.config.addonRef}/content/zemble.css`,
+    },
+  });
+  doc.documentElement?.appendChild(styles);
+}
 
 async function onMainWindowUnload(win: Window): Promise<void> {
   ztoolkit.unregisterAll();

@@ -1,0 +1,10 @@
+a.cell {
+  color: white !important;
+  display: block;
+  cursor: pointer !important;
+  text-decoration: none;
+}
+
+a.cell:hover {
+  text-decoration: underline !important;
+}
