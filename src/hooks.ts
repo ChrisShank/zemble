@@ -1,51 +1,69 @@
-class FetchCache<Data> {
-  cache = new Map<string, Data | undefined>();
+import { createSembleClient } from "@semble.so/api";
 
-  flushing = false;
-  promiseQueue = new Map<string, Promise<Data>>();
-  fetcher: (key: string) => Promise<Data>;
+const client = createSembleClient({
+  apiKey: "",
+});
+
+class FetchCache<Data> {
+  #cache = new Map<string, Data | undefined>();
+
+  #flushing = false;
+  #promiseQueue = new Map<string, Promise<Data | undefined>>();
+  #fetcher: (key: string) => Promise<Data>;
 
   constructor(fetcher: (key: string) => Promise<Data>) {
-    this.fetcher = fetcher;
+    this.#fetcher = fetcher;
   }
 
   get(key: string) {
-    const data = this.cache.get(key);
     if (!key) return undefined;
 
-    if (data !== undefined) return data;
+    const data = this.#cache.get(key);
+    if (data !== undefined) {
+      return data;
+    }
 
-    if (!this.promiseQueue.has(key)) {
-      this.promiseQueue.set(key, this.fetcher(key));
+    if (!this.#promiseQueue.has(key)) {
+      this.#promiseQueue.set(
+        key,
+        this.#fetcher(key).catch((e) => {
+          ztoolkit.log("Error fetching from cache: ", e);
+          return undefined;
+        }),
+      );
 
-      if (!this.flushing) {
-        this.flushing = true;
-        setTimeout(this.refresh, 100);
+      if (!this.#flushing) {
+        this.#flushing = true;
+        setTimeout(this.#refresh, 100);
       }
     }
 
     return undefined;
   }
 
-  refresh = async () => {
-    const promises = Array.from(this.promiseQueue.entries()).map(
-      ([key, promise]) =>
-        promise
-          .then((d) => [key, d] as const)
-          .catch((e) => {
-            ztoolkit.log(e);
-            return [key, undefined] as const;
-          }),
+  set(key: string, data: Data) {
+    this.#cache.set(key, data);
+    Zotero.Notifier.trigger("refresh", "itemtree", []);
+  }
+
+  revalidate(key: string) {
+    this.#cache.delete(key);
+    this.get(key);
+  }
+
+  #refresh = async () => {
+    const promises = Array.from(this.#promiseQueue.entries()).map(
+      ([key, promise]) => promise.then((d) => [key, d] as const),
     );
-    this.promiseQueue.clear();
-    this.flushing = false;
+    this.#promiseQueue.clear();
+    this.#flushing = false;
     const results = await Promise.allSettled(promises);
 
     for (const result of results) {
       if (result.status === "fulfilled") {
-        this.cache.set(result.value[0], result.value[1]);
+        this.#cache.set(result.value[0], result.value[1]);
       } else {
-        this.cache.set(result.reason[0], undefined);
+        this.#cache.set(result.reason[0], undefined);
       }
     }
 
@@ -54,16 +72,18 @@ class FetchCache<Data> {
 }
 
 let favicon;
-const statCache = new FetchCache((url: string) =>
-  fetch(
-    `https://api.semble.so/api/cards/metadata?url=${url}&includeStats=true`,
-  ).then((r) => r.json() as Record<string, any>),
-);
+const cardCache = new FetchCache(async (url: string) => {
+  const [{ metadata, stats }, status] = await Promise.all([
+    client.cards
+      .urlMetadata({ query: { url, includeStats: true } })
+      .then((r) => r.body as Required<typeof r.body>),
+    client.cards.urlLibraryStatus({ query: { url } }).then((r) => r.body),
+  ]);
+  return { metadata, stats, status };
+});
 
 const notesCache = new FetchCache((url: string) =>
-  fetch(`https://api.semble.so/api/cards/notes/url?url=${url}`).then(
-    (r) => r.json() as Record<string, any>,
-  ),
+  client.cards.noteCardsForUrl({ query: { url } }).then((r) => r.body),
 );
 
 async function onStartup() {
@@ -86,7 +106,7 @@ async function onStartup() {
 
   ztoolkit.Menu.register("item", {
     tag: "menu",
-    label: "Open in Semble",
+    label: "Semble",
     children: [
       {
         tag: "menuitem",
@@ -149,32 +169,60 @@ async function onStartup() {
   await Zotero.ItemTreeManager.registerColumn({
     pluginID: addon.data.config.addonID,
     dataKey: "semble-cards",
-    label: "Semble Cards Saved",
-    htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Cards Saved</span>`,
+    label: "Semble Added By",
+    htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Added By</span>`,
     dataProvider: (item: Zotero.Item) => {
       const url = item.getField("url") || item.getField("DOI");
-      const data = statCache.get(url);
+      const data = cardCache.get(url);
+      ztoolkit.log(url, data);
       const count = data?.stats?.libraryCount;
-      return count ? `${count},${url}` : "";
+      const saved = data?.status.card?.urlInLibrary || false;
+      const cardId = data?.status.card?.id;
+      return count !== undefined ? `${count},${url},${saved},${cardId}` : "";
     },
     renderCell(index, data = "", column, isFirstColumn, doc) {
-      const [count, url] = data.split(",");
-      const a = doc.createElement("a");
+      const [count, url, savedString, cardId] = data.split(",");
+      const saved = savedString === "true";
+      const span = doc.createElement("span");
+      span.className = `cell ${column.className} semble`;
+      ztoolkit.log("render", count, url, saved);
 
-      if (count !== undefined && count !== "0") {
-        a.textContent = count;
-        a.href = "#";
-        a.className = `cell ${column.className}`;
-        a.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          ztoolkit
-            .getGlobal("ZoteroPane")
-            .loadURI([`https://semble.so/url?id=${url}`]);
-        };
-      }
+      if (count === "") return span;
 
-      return a;
+      const button = doc.createElement("button");
+      button.style.margin = "0 auto";
+      button.textContent = saved ? `✓ ${count}` : `+ ${count}`;
+      button.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const data = cardCache.get(url)!;
+        ztoolkit.log(data);
+        if (saved) {
+          client.cards.removeFromLibrary({ body: { cardId } });
+          data.stats.libraryCount -= 1;
+          if (data.status.card) data.status.card.urlInLibrary = false;
+          cardCache.set(url, data);
+        } else {
+          const addUrlPromise = client.cards.addUrlToLibrary({ body: { url } });
+          data.stats.libraryCount += 1;
+
+          // optimistically update UI in a hacky way
+          if (data.status.card === undefined) {
+            data.status.card = { urlInLibrary: true } as any;
+            cardCache.set(url, data);
+            await addUrlPromise;
+            cardCache.revalidate(url);
+          } else {
+            data.status.card!.urlInLibrary = true;
+            cardCache.set(url, data);
+          }
+        }
+      };
+
+      span.append(button);
+
+      return span;
     },
   });
 
@@ -185,7 +233,7 @@ async function onStartup() {
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Collections</span>`,
     dataProvider: (item: Zotero.Item) => {
       const url = item.getField("url") || item.getField("DOI");
-      const data = statCache.get(url);
+      const data = cardCache.get(url);
       const count = data?.stats?.collectionCount;
       return count ? `${count},${url}` : "";
     },
@@ -195,8 +243,7 @@ async function onStartup() {
 
       if (count !== undefined && count !== "0") {
         a.textContent = count;
-        a.href = "#";
-        a.className = `cell ${column.className}`;
+        a.className = `cell ${column.className} semble`;
 
         a.onclick = (e) => {
           e.preventDefault();
@@ -218,7 +265,7 @@ async function onStartup() {
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Connections</span>`,
     dataProvider: (item: Zotero.Item) => {
       const url = item.getField("url") || item.getField("DOI");
-      const data = statCache.get(url);
+      const data = cardCache.get(url);
       const count = data?.stats?.connections?.all?.total;
       return count ? `${count},${url}` : "";
     },
@@ -228,8 +275,7 @@ async function onStartup() {
 
       if (count !== undefined && count !== "0") {
         a.textContent = count;
-        a.href = "#";
-        a.className = `cell ${column.className}`;
+        a.className = `cell ${column.className} semble`;
         a.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -260,8 +306,7 @@ async function onStartup() {
 
       if (count !== undefined && count !== "0") {
         a.textContent = count;
-        a.href = "#";
-        a.className = `cell ${column.className}`;
+        a.className = `cell ${column.className} semble`;
         a.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -311,7 +356,7 @@ async function onNotify(
   extraData: { [key: string]: any },
 ) {
   // You can add your code to the corresponding notify type
-  ztoolkit.log("notify", event, type, ids, extraData);
+  // ztoolkit.log("notify", event, type, ids, extraData);
 }
 
 /**
