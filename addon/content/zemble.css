@@ -1,16 +1,16 @@
-a.cell.semble {
-  color: white !important;
-  display: block;
-  cursor: pointer !important;
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline !important;
-  }
-}
-
 span.cell.semble {
   display: flex;
   justify-content: center;
   align-items: center;
+
+  a {
+    color: white !important;
+    display: block;
+    cursor: pointer !important;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline !important;
+    }
+  }
 }

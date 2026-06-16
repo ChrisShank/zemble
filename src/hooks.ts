@@ -1,14 +1,13 @@
 import { createSembleClient } from "@semble.so/api";
 
 const client = createSembleClient({
-  apiKey: "",
+  apiKey: "sk_cudlUtOcGSuNnmPs7xnN1Ta8PFdcaa3g",
 });
 
 class FetchCache<Data> {
-  #cache = new Map<string, Data | undefined>();
-
   #flushing = false;
-  #promiseQueue = new Map<string, Promise<Data | undefined>>();
+  #cache = new Map<string, Data | null>();
+  #promiseQueue = new Map<string, Promise<Data | null>>();
   #fetcher: (key: string) => Promise<Data>;
 
   constructor(fetcher: (key: string) => Promise<Data>) {
@@ -19,23 +18,26 @@ class FetchCache<Data> {
     if (!key) return undefined;
 
     const data = this.#cache.get(key);
-    if (data !== undefined) {
-      return data;
-    }
+    // an error fetching data already happened or the data is being fetched
+    if (data === null) return undefined;
 
-    if (!this.#promiseQueue.has(key)) {
-      this.#promiseQueue.set(
-        key,
-        this.#fetcher(key).catch((e) => {
-          ztoolkit.log("Error fetching from cache: ", e);
-          return undefined;
-        }),
-      );
+    // data has not been loaded yet
+    if (data !== undefined) return data;
 
-      if (!this.#flushing) {
-        this.#flushing = true;
-        setTimeout(this.#refresh, 100);
-      }
+    ztoolkit.log("full cache miss", key);
+
+    this.#cache.set(key, null);
+    this.#promiseQueue.set(
+      key,
+      this.#fetcher(key).catch((e) => {
+        ztoolkit.log("Error fetching from cache: ", e.message);
+        return null;
+      }),
+    );
+
+    if (!this.#flushing) {
+      this.#flushing = true;
+      setTimeout(this.#refresh, 200);
     }
 
     return undefined;
@@ -55,15 +57,17 @@ class FetchCache<Data> {
     const promises = Array.from(this.#promiseQueue.entries()).map(
       ([key, promise]) => promise.then((d) => [key, d] as const),
     );
+    // invalidate before waiting so new promises coming in can be fetched
     this.#promiseQueue.clear();
     this.#flushing = false;
+
     const results = await Promise.allSettled(promises);
 
     for (const result of results) {
       if (result.status === "fulfilled") {
         this.#cache.set(result.value[0], result.value[1]);
       } else {
-        this.#cache.set(result.reason[0], undefined);
+        this.#cache.set(result.reason[0], null);
       }
     }
 
@@ -73,13 +77,21 @@ class FetchCache<Data> {
 
 let favicon;
 const cardCache = new FetchCache(async (url: string) => {
-  const [{ metadata, stats }, status] = await Promise.all([
-    client.cards
-      .urlMetadata({ query: { url, includeStats: true } })
-      .then((r) => r.body as Required<typeof r.body>),
-    client.cards.urlLibraryStatus({ query: { url } }).then((r) => r.body),
+  const [urlMetadata, urlStatus] = await Promise.all([
+    client.cards.urlMetadata({ query: { url, includeStats: true } }),
+    client.cards.urlLibraryStatus({ query: { url } }),
   ]);
-  return { metadata, stats, status };
+
+  if (urlStatus.status !== 200)
+    throw new Error(`Error fetching card status: ${urlStatus.status}`);
+  if (urlMetadata.status !== 200)
+    throw new Error(`Error fetching card metadata: ${urlMetadata.status}`);
+
+  return {
+    metadata: urlMetadata.body.metadata,
+    stats: urlMetadata.body.stats!,
+    status: urlStatus.body,
+  };
 });
 
 const notesCache = new FetchCache((url: string) =>
@@ -166,29 +178,23 @@ async function onStartup() {
     icon: favicon,
   });
 
-  await Zotero.ItemTreeManager.registerColumn({
+  Zotero.ItemTreeManager.registerColumn({
     pluginID: addon.data.config.addonID,
     dataKey: "semble-cards",
     label: "Semble Added By",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Added By</span>`,
-    dataProvider: (item: Zotero.Item) => {
-      const url = item.getField("url") || item.getField("DOI");
-      const data = cardCache.get(url);
-      ztoolkit.log(url, data);
-      const count = data?.stats?.libraryCount;
-      const saved = data?.status.card?.urlInLibrary || false;
-      const cardId = data?.status.card?.id;
-      return count !== undefined ? `${count},${url},${saved},${cardId}` : "";
-    },
-    renderCell(index, data = "", column, isFirstColumn, doc) {
-      const [count, url, savedString, cardId] = data.split(",");
-      const saved = savedString === "true";
+    dataProvider: (item: Zotero.Item) =>
+      item.getField("url") || item.getField("DOI"),
+    renderCell(index, url = "", column, isFirstColumn, doc) {
       const span = doc.createElement("span");
       span.className = `cell ${column.className} semble`;
-      ztoolkit.log("render", count, url, saved);
+      const data = cardCache.get(url);
 
-      if (count === "") return span;
+      if (url === "" || data === undefined) return span;
 
+      const count = data?.stats?.libraryCount || 0;
+      const saved = data?.status.card?.urlInLibrary || false;
+      const cardId = data?.status.card?.id || "";
       const button = doc.createElement("button");
       button.style.margin = "0 auto";
       button.textContent = saved ? `✓ ${count}` : `+ ${count}`;
@@ -197,7 +203,7 @@ async function onStartup() {
         e.stopPropagation();
 
         const data = cardCache.get(url)!;
-        ztoolkit.log(data);
+
         if (saved) {
           client.cards.removeFromLibrary({ body: { cardId } });
           data.stats.libraryCount -= 1;
@@ -226,25 +232,22 @@ async function onStartup() {
     },
   });
 
-  await Zotero.ItemTreeManager.registerColumn({
+  Zotero.ItemTreeManager.registerColumn({
     pluginID: addon.data.config.addonID,
     dataKey: "semble-collections",
     label: "Semble Collections",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Collections</span>`,
-    dataProvider: (item: Zotero.Item) => {
-      const url = item.getField("url") || item.getField("DOI");
+    dataProvider: (item: Zotero.Item) =>
+      item.getField("url") || item.getField("DOI"),
+    renderCell(index, url = "", column, isFirstColumn, doc) {
       const data = cardCache.get(url);
       const count = data?.stats?.collectionCount;
-      return count ? `${count},${url}` : "";
-    },
-    renderCell(index, data = "", column, isFirstColumn, doc) {
-      const [count, url] = data.split(",");
-      const a = doc.createElement("a");
+      const span = doc.createElement("span");
+      span.className = `cell ${column.className} semble`;
 
-      if (count !== undefined && count !== "0") {
-        a.textContent = count;
-        a.className = `cell ${column.className} semble`;
-
+      if (count !== undefined && count !== 0) {
+        const a = doc.createElement("a");
+        a.textContent = count.toString();
         a.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -252,29 +255,29 @@ async function onStartup() {
             .getGlobal("ZoteroPane")
             .loadURI([`https://semble.so/url?id=${url}&sembleTab=collections`]);
         };
+        span.appendChild(a);
       }
 
-      return a;
+      return span;
     },
   });
 
-  await Zotero.ItemTreeManager.registerColumn({
+  Zotero.ItemTreeManager.registerColumn({
     pluginID: addon.data.config.addonID,
     dataKey: "semble-connections",
     label: "Semble Connections",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Connections</span>`,
-    dataProvider: (item: Zotero.Item) => {
-      const url = item.getField("url") || item.getField("DOI");
+    dataProvider: (item: Zotero.Item) =>
+      item.getField("url") || item.getField("DOI"),
+    renderCell(index, url = "", column, isFirstColumn, doc) {
       const data = cardCache.get(url);
       const count = data?.stats?.connections?.all?.total;
-      return count ? `${count},${url}` : "";
-    },
-    renderCell(index, data = "", column, isFirstColumn, doc) {
-      const [count, url] = data.split(",");
-      const a = doc.createElement("a");
+      const span = doc.createElement("span");
+      span.className = `cell ${column.className} semble`;
 
-      if (count !== undefined && count !== "0") {
-        a.textContent = count;
+      if (count !== undefined && count !== 0) {
+        const a = doc.createElement("a");
+        a.textContent = count.toString();
         a.className = `cell ${column.className} semble`;
         a.onclick = (e) => {
           e.preventDefault();
@@ -283,29 +286,29 @@ async function onStartup() {
             .getGlobal("ZoteroPane")
             .loadURI([`https://semble.so/url?id=${url}&sembleTab=connections`]);
         };
+        span.appendChild(a);
       }
 
-      return a;
+      return span;
     },
   });
 
-  await Zotero.ItemTreeManager.registerColumn({
+  Zotero.ItemTreeManager.registerColumn({
     pluginID: addon.data.config.addonID,
     dataKey: "semble-notes",
     label: "Semble Notes",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Notes</span>`,
-    dataProvider: (item: Zotero.Item) => {
-      const url = item.getField("url") || item.getField("DOI");
+    dataProvider: (item: Zotero.Item) =>
+      item.getField("url") || item.getField("DOI"),
+    renderCell(index, url = "", column, isFirstColumn, doc) {
       const data = notesCache.get(url);
       const count = data?.notes.length;
-      return count ? `${count},${url}` : "";
-    },
-    renderCell(index, data = "", column, isFirstColumn, doc) {
-      const [count, url] = data.split(",");
-      const a = doc.createElement("a");
+      const span = doc.createElement("span");
+      span.className = `cell ${column.className} semble`;
 
-      if (count !== undefined && count !== "0") {
-        a.textContent = count;
+      if (count !== undefined && count !== 0) {
+        const a = doc.createElement("a");
+        a.textContent = count.toString();
         a.className = `cell ${column.className} semble`;
         a.onclick = (e) => {
           e.preventDefault();
@@ -314,9 +317,10 @@ async function onStartup() {
             .getGlobal("ZoteroPane")
             .loadURI([`https://semble.so/url?id=${url}&sembleTab=notes`]);
         };
+        span.appendChild(span);
       }
 
-      return a;
+      return span;
     },
   });
 }
