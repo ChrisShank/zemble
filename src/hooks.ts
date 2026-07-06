@@ -1,7 +1,8 @@
 import { createSembleClient } from "@semble.so/api";
+import { getPref, setPref } from "./utils/prefs";
 
-const client = createSembleClient({
-  apiKey: "sk_cudlUtOcGSuNnmPs7xnN1Ta8PFdcaa3g",
+let client = createSembleClient({
+  apiKey: "",
 });
 
 class FetchCache<Data> {
@@ -73,9 +74,15 @@ class FetchCache<Data> {
 
     Zotero.Notifier.trigger("refresh", "itemtree", []);
   };
+
+  reset() {
+    this.#cache.clear();
+    this.#promiseQueue.clear();
+  }
 }
 
 let favicon;
+
 const cardCache = new FetchCache(async (url: string) => {
   const [urlMetadata, urlStatus] = await Promise.all([
     client.cards.urlMetadata({ query: { url, includeStats: true } }),
@@ -98,6 +105,51 @@ const notesCache = new FetchCache((url: string) =>
   client.cards.noteCardsForUrl({ query: { url } }).then((r) => r.body),
 );
 
+const getURLFromItem = (item: Zotero.Item) =>
+  item.getField("url") || item.getField("DOI");
+
+async function ensureProfilePrefs() {
+  const currentApiKey = getPref("apiKey");
+
+  if (currentApiKey) {
+    cardCache.reset();
+    notesCache.reset();
+    client = createSembleClient({
+      apiKey: currentApiKey,
+    });
+    return;
+  }
+
+  const win = Zotero.getMainWindow() as mozIDOMWindowProxy;
+  const prompts = Services.prompt as any;
+
+  if (!currentApiKey) {
+    const apiKeyInput = { value: "" };
+    const result = prompts.promptPassword(
+      win,
+      "Zemble API Key",
+      "Paste your API key to connect your Semble library, create one here: \n\nhttps://semble.so/settings/api-keys",
+      apiKeyInput,
+      "",
+      { value: false },
+    );
+
+    // If cancelled, return
+    if (!result) return;
+
+    const newApiKey = apiKeyInput.value.trim();
+
+    if (newApiKey) {
+      setPref("apiKey", newApiKey);
+      cardCache.reset();
+      notesCache.reset();
+      client = createSembleClient({
+        apiKey: currentApiKey,
+      });
+    }
+  }
+}
+
 async function onStartup() {
   await Promise.all([
     Zotero.initializationPromise,
@@ -107,6 +159,15 @@ async function onStartup() {
 
   // initLocale();
   favicon = `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`;
+
+  Zotero.PreferencePanes.register({
+    pluginID: addon.data.config.addonID,
+    src: rootURI + "content/preferences.xhtml",
+    label: "Zemble",
+    image: favicon,
+  });
+
+  ensureProfilePrefs();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -119,6 +180,7 @@ async function onStartup() {
   ztoolkit.Menu.register("item", {
     tag: "menu",
     label: "Semble",
+    icon: favicon,
     children: [
       {
         tag: "menuitem",
@@ -175,7 +237,57 @@ async function onStartup() {
         },
       },
     ],
+  });
+
+  ztoolkit.Menu.register("collection", {
+    tag: "menu",
+    label: "Semble",
     icon: favicon,
+    children: [
+      {
+        tag: "menuitem",
+        label: "Save All Items",
+        isDisabled: () => {
+          const pane = Zotero.getActiveZoteroPane();
+          const selectedCollection = pane.getSelectedCollection();
+          return !selectedCollection;
+        },
+        commandListener: (event) => {
+          const pane = Zotero.getActiveZoteroPane();
+          const selectedCollection = pane.getSelectedCollection();
+          const libraryId = pane.getSelectedLibraryID();
+          const lib = Zotero.Libraries.get(libraryId);
+
+          if (selectedCollection == null) return;
+
+          ztoolkit.log("Selected Collection: ", selectedCollection);
+
+          const urls = selectedCollection
+            .getChildItems()
+            .map(getURLFromItem)
+            .filter((url) => url !== "");
+          ztoolkit.log(urls);
+
+          // const pane = ztoolkit.getGlobal("ZoteroPane");
+          // const selectedItems = pane.getSelectedItems();
+
+          // const urls: string[] = [];
+
+          // for (const item of selectedItems) {
+          //   const urlString = item.getField("url");
+
+          //   if (urlString !== "") {
+          //     const url = new URL("https://semble.so/url");
+          //     url.searchParams.set("id", urlString);
+
+          //     urls.push(url.toString());
+          //   }
+          // }
+
+          // pane.loadURI(urls);
+        },
+      },
+    ],
   });
 
   Zotero.ItemTreeManager.registerColumn({
@@ -183,8 +295,7 @@ async function onStartup() {
     dataKey: "semble-cards",
     label: "Semble Added By",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Added By</span>`,
-    dataProvider: (item: Zotero.Item) =>
-      item.getField("url") || item.getField("DOI"),
+    dataProvider: getURLFromItem,
     renderCell(index, url = "", column, isFirstColumn, doc) {
       const span = doc.createElement("span");
       span.className = `cell ${column.className} semble`;
@@ -237,8 +348,7 @@ async function onStartup() {
     dataKey: "semble-collections",
     label: "Semble Collections",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Collections</span>`,
-    dataProvider: (item: Zotero.Item) =>
-      item.getField("url") || item.getField("DOI"),
+    dataProvider: getURLFromItem,
     renderCell(index, url = "", column, isFirstColumn, doc) {
       const data = cardCache.get(url);
       const count = data?.stats?.collectionCount;
@@ -267,8 +377,7 @@ async function onStartup() {
     dataKey: "semble-connections",
     label: "Semble Connections",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Connections</span>`,
-    dataProvider: (item: Zotero.Item) =>
-      item.getField("url") || item.getField("DOI"),
+    dataProvider: getURLFromItem,
     renderCell(index, url = "", column, isFirstColumn, doc) {
       const data = cardCache.get(url);
       const count = data?.stats?.connections?.all?.total;
@@ -298,8 +407,7 @@ async function onStartup() {
     dataKey: "semble-notes",
     label: "Semble Notes",
     htmlLabel: `<span><img src="${favicon}" height="10px" width="9px" style="margin-right: 5px;"/>Notes</span>`,
-    dataProvider: (item: Zotero.Item) =>
-      item.getField("url") || item.getField("DOI"),
+    dataProvider: getURLFromItem,
     renderCell(index, url = "", column, isFirstColumn, doc) {
       const data = notesCache.get(url);
       const count = data?.notes.length;
@@ -369,7 +477,9 @@ async function onNotify(
  * @param type event type
  * @param data event data
  */
-async function onPrefsEvent(type: string, data: { [key: string]: any }) {}
+async function onPrefsEvent(type: string, data: { [key: string]: any }) {
+  ztoolkit.log(type, data);
+}
 
 function onShortcuts(type: string) {}
 

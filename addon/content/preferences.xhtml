@@ -1,33 +1,54 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
+
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
-  <label><html:h2 data-l10n-id="pref-title"></html:h2></label>
-  <checkbox
-    id="zotero-prefpane-__addonRef__-enable"
-    preference="enable"
-    data-l10n-id="pref-enable"
-  />
-  <hbox>
+  <label value="Paste your API key to connect your Semble library, create one">
+    <label
+      class="zotero-text-link keyboard-clickable"
+      is="zotero-text-link"
+      role="link"
+      style="margin-left: 0.5ch"
+      href="https://semble.so/settings/api-keys"
+      value="here."
+    ></label>
+  </label>
+  <hbox align="center" style="margin-left: 15px; margin-top: 10px">
     <html:label
-      for="zotero-prefpane-__addonRef__-input"
-      data-l10n-id="pref-input"
+      for="semble-api-key"
+      data-l10n-id="pref-api-key"
+      style="width: 80px"
     ></html:label>
     <html:input
-      type="text"
-      id="zotero-prefpane-__addonRef__-input"
-      preference="input"
-    ></html:input>
+      type="password"
+      id="semble-api-key"
+      preference="__prefsPrefix__.apiKey"
+      placeholder="e.g. sl_abc123..."
+      style="flex: 1; margin-left: 10px"
+      rows="3"
+    >
+    </html:input>
   </hbox>
-  <hbox class="virtualized-table-container" flex="1" height="300px">
-    <html:div id="__addonRef__-table-container" />
-  </hbox>
+</groupbox>
+
+<groupbox style="margin-top: 20px">
+  <label>
+    <html:h2 data-l10n-id="pref-about"></html:h2>
+  </label>
+  <label
+    class="zotero-text-link keyboard-clickable"
+    is="zotero-text-link"
+    role="link"
+    href="https://github.com/ChrisShank/zemble"
+    value="Zemble Documentation"
+  ></label>
 </groupbox>
 <vbox>
   <html:label
     data-l10n-id="pref-help"
-    data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
-  ></html:label>
+    data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__","build":"__env__"}'
+  >
+  </html:label>
 </vbox>

@@ -1,5 +1,4 @@
-pref-title = Addon Template Example
-pref-enable =
-    .label = Enable
-pref-input = Input
+pref-title = Zemble Settings
+pref-api-key = Your API Key
 pref-help = { $name } Build { $version } { $time }
+pref-about = About
