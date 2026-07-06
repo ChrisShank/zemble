@@ -1,7 +1,7 @@
 {
   "name": "zemble",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Zotero Plugin for Semble",
   "config": {
     "addonName": "Zemble",
@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@semble.so/api": "^0.0.3",
+    "lru-cache": "^11.5.1",
     "zotero-plugin-toolkit": "^5.1.0-beta.13"
   },
   "devDependencies": {
