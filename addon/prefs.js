@@ -1,1 +1,2 @@
 pref("apiKey", "");
+pref("collections", "");

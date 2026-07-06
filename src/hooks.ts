@@ -244,45 +244,76 @@ async function onStartup() {
     children: [
       {
         tag: "menuitem",
-        label: "Save All Items",
+        label: "Save to Semble Collection",
         isDisabled: () => {
           const pane = Zotero.getActiveZoteroPane();
           const selectedCollection = pane.getSelectedCollection();
           return !selectedCollection;
         },
-        commandListener: (event) => {
+        commandListener: async (event) => {
           const pane = Zotero.getActiveZoteroPane();
           const selectedCollection = pane.getSelectedCollection();
-          const libraryId = pane.getSelectedLibraryID();
-          const lib = Zotero.Libraries.get(libraryId);
+          // const libraryId = pane.getSelectedLibraryID();
+          // const lib = Zotero.Libraries.get(libraryId);
 
           if (selectedCollection == null) return;
 
           ztoolkit.log("Selected Collection: ", selectedCollection);
+          const name = `Zotero - ${selectedCollection.name}`;
+          const persistedCollections = JSON.parse(
+            getPref("collections") || "{}",
+          );
+          let collectionId = persistedCollections[selectedCollection.id] as
+            | string
+            | undefined;
 
-          const urls = selectedCollection
-            .getChildItems()
-            .map(getURLFromItem)
-            .filter((url) => url !== "");
-          ztoolkit.log(urls);
+          if (!collectionId) {
+            ztoolkit.log("create collection");
+            const { body } = await client.collections.createCollection({
+              body: {
+                name,
+                description: "Generated from a Zotero collection.",
+              },
+            });
+            collectionId = body.collectionId;
+            persistedCollections[selectedCollection.id] = collectionId;
+            setPref("collections", JSON.stringify(persistedCollections));
+          } else {
+            ztoolkit.log("collection already exists", collectionId);
+          }
 
-          // const pane = ztoolkit.getGlobal("ZoteroPane");
-          // const selectedItems = pane.getSelectedItems();
+          const items = selectedCollection.getChildItems();
 
-          // const urls: string[] = [];
+          for (const item of items) {
+            const url = getURLFromItem(item);
 
-          // for (const item of selectedItems) {
-          //   const urlString = item.getField("url");
+            if (url === "") continue;
 
-          //   if (urlString !== "") {
-          //     const url = new URL("https://semble.so/url");
-          //     url.searchParams.set("id", urlString);
+            const addUrlPromise = client.cards.addUrlToLibrary({
+              body: {
+                url,
+                note: "Added from Zotero.",
+                collectionIds: [collectionId],
+              },
+            });
 
-          //     urls.push(url.toString());
-          //   }
-          // }
+            const data = cardCache.get(url);
 
-          // pane.loadURI(urls);
+            if (data === undefined) return;
+
+            data.stats.libraryCount += 1;
+
+            // optimistically update UI in a hacky way
+            if (data.status.card === undefined) {
+              data.status.card = { urlInLibrary: true } as any;
+              cardCache.set(url, data);
+              await addUrlPromise;
+              cardCache.revalidate(url);
+            } else {
+              data.status.card!.urlInLibrary = true;
+              cardCache.set(url, data);
+            }
+          }
         },
       },
     ],
