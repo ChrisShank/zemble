@@ -10,10 +10,22 @@
 
 <video src="https://github.com/user-attachments/assets/6b431fb2-c104-4034-bb7c-6cd0b0ca2e79" width="300" controls></video>
 
+## API Key
+
+When you first enable the plugin you will be prompted to add your Semble API Key. If you don't already have one, make one [here](https://semble.so/settings/api-keys). You can change this at any time by going to `Preferences -> Zemble`.
+
 ## Functionality
 
-- Open items in Zotero directly in Semble.
-  - Right-clicking on selected items in Zotero will now have an option to open URLs and DOIs in Semble in your browser. If multiple items are selected they will each load in separate browser tabs. ![Example showing the options to open in Semble when right-clicking on items](docs/right-click.png)
+- Columns to see how others have interacted with Zotero items. They are all links to the corresponding views in Semble.
+  - Added By - how many people has this collection been saved by and have you saved it
+    - Clicking on this will save/remove the item to semble.
+  - Collections - how many collections has this item been saved to.
+  - Connections - how many connections does this item have.
+  - Notes - how many notes does this item have.
+- Right clicking on items. If multiple items are selected then they will each load in a separate tab.
+  - Open items in Semble, if they have a URL or DOI.
+- Right click on a collection.
+  - Save to Semble - Creates a new collection on Semble and saves all of the items in that Zotero Collection to Semble. If done multiple times it will update the same collection with new cards.
 
 ## Contributing
 
