@@ -28,6 +28,11 @@
       placeholder="e.g. sl_abc123..."
       style="flex: 1; margin-left: 10px"
       rows="3"
+      onblur="
+        Zotero.__addonInstance__.hooks.onPrefsEvent('apiKey', {
+          value: event.target.value,
+        })
+      "
     >
     </html:input>
   </hbox>

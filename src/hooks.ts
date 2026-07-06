@@ -5,6 +5,12 @@ let client = createSembleClient({
   apiKey: "",
 });
 
+function setClient(apiKey: string) {
+  cardCache.reset();
+  notesCache.reset();
+  client = createSembleClient({ apiKey });
+}
+
 class FetchCache<Data> {
   #flushing = false;
   #cache = new Map<string, Data | null>();
@@ -112,11 +118,7 @@ async function ensureProfilePrefs() {
   const currentApiKey = getPref("apiKey");
 
   if (currentApiKey) {
-    cardCache.reset();
-    notesCache.reset();
-    client = createSembleClient({
-      apiKey: currentApiKey,
-    });
+    setClient(currentApiKey);
     return;
   }
 
@@ -141,11 +143,7 @@ async function ensureProfilePrefs() {
 
     if (newApiKey) {
       setPref("apiKey", newApiKey);
-      cardCache.reset();
-      notesCache.reset();
-      client = createSembleClient({
-        apiKey: currentApiKey,
-      });
+      setClient(newApiKey);
     }
   }
 }
@@ -478,7 +476,12 @@ async function onNotify(
  * @param data event data
  */
 async function onPrefsEvent(type: string, data: { [key: string]: any }) {
-  ztoolkit.log(type, data);
+  ztoolkit.log("pref event", type);
+
+  if (type === "apiKey") {
+    setClient(data.value);
+    Zotero.Notifier.trigger("refresh", "itemtree", []);
+  }
 }
 
 function onShortcuts(type: string) {}
