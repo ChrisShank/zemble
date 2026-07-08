@@ -1,16 +1,13 @@
-span.cell.semble {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+span.cell.semble a {
+  display: block;
+  /* font color should follow the text color that zotero sets */
+  color: inherit;
+  width: 100%;
+  text-align: center;
+  cursor: pointer !important;
+  text-decoration: none;
 
-  a {
-    color: white !important;
-    display: block;
-    cursor: pointer !important;
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline !important;
-    }
+  &:hover {
+    text-decoration: underline !important;
   }
 }

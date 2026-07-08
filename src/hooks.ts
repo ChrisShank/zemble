@@ -12,6 +12,7 @@ function setClient(apiKey: string) {
 }
 
 class FetchCache<Data> {
+  #redraw = false;
   #flushing = false;
   #cache = new Map<string, Data | null>();
   #promiseQueue = new Map<string, Promise<Data | null>>();
@@ -52,12 +53,19 @@ class FetchCache<Data> {
 
   set(key: string, data: Data) {
     this.#cache.set(key, data);
-    Zotero.Notifier.trigger("refresh", "itemtree", []);
+    if (!this.#redraw) {
+      this.#redraw = true;
+      setTimeout(() => {
+        this.#redraw = false;
+        Zotero.Notifier.trigger("redraw", "itemtree", []);
+      }, 0);
+    }
   }
 
   revalidate(key: string) {
-    this.#cache.delete(key);
-    this.get(key);
+    const removed = this.#cache.delete(key);
+    // only revalidate if it existed
+    if (removed) this.get(key);
   }
 
   #refresh = async () => {
@@ -78,7 +86,7 @@ class FetchCache<Data> {
       }
     }
 
-    Zotero.Notifier.trigger("refresh", "itemtree", []);
+    Zotero.Notifier.trigger("redraw", "itemtree", []);
   };
 
   reset() {
@@ -110,6 +118,17 @@ const cardCache = new FetchCache(async (url: string) => {
 const notesCache = new FetchCache((url: string) =>
   client.cards.noteCardsForUrl({ query: { url } }).then((r) => r.body),
 );
+
+function batchArr<T>(arr: T[], size: number): T[][] {
+  const batch: T[][] = [];
+  let i = 0;
+  while (i < arr.length) {
+    const j = i + size;
+    batch.push(arr.slice(i, i + size));
+    i = j;
+  }
+  return batch;
+}
 
 const getURLFromItem = (item: Zotero.Item) =>
   item.getField("url") || item.getField("DOI");
@@ -244,28 +263,67 @@ async function onStartup() {
     children: [
       {
         tag: "menuitem",
-        label: "Save to Semble Collection",
+        label: "Publish as Semble collection",
         isDisabled: () => {
           const pane = Zotero.getActiveZoteroPane();
           const selectedCollection = pane.getSelectedCollection();
           return !selectedCollection;
         },
-        commandListener: async (event) => {
+        commandListener: async () => {
           const pane = Zotero.getActiveZoteroPane();
           const selectedCollection = pane.getSelectedCollection();
-          // const libraryId = pane.getSelectedLibraryID();
-          // const lib = Zotero.Libraries.get(libraryId);
 
           if (selectedCollection == null) return;
 
           ztoolkit.log("Selected Collection: ", selectedCollection);
+
+          const items = selectedCollection.getChildItems();
+
+          const urls = items.map(getURLFromItem).filter((url) => url !== "");
+
+          ztoolkit.log("collection urls", urls);
+
+          for (const url of urls) {
+            const data = cardCache.get(url);
+
+            if (data === undefined) continue;
+
+            // optimistically update UI in a hacky way
+            if (data.status.card === undefined) {
+              data.status.card = { urlInLibrary: true } as any;
+              data.stats.libraryCount += 1;
+            } else if (!data.status.card.urlInLibrary) {
+              data.status.card.urlInLibrary = true;
+              data.stats.libraryCount += 1;
+            }
+            cardCache.set(url, data);
+          }
+
+          ztoolkit.log("optimistically update saved items");
+
           const name = `Zotero - ${selectedCollection.name}`;
+
           const persistedCollections = JSON.parse(
             getPref("collections") || "{}",
           );
+
           let collectionId = persistedCollections[selectedCollection.id] as
             | string
             | undefined;
+
+          if (collectionId) {
+            const r = await client.collections.collectionById({
+              query: { collectionId },
+            });
+
+            // Collection was deleted
+            if (r.status !== 200) {
+              ztoolkit.log("Persisted collection does not exist", collectionId);
+              collectionId = undefined;
+              delete persistedCollections[selectedCollection.id];
+              setPref("collections", JSON.stringify(persistedCollections));
+            }
+          }
 
           if (!collectionId) {
             ztoolkit.log("create collection");
@@ -282,38 +340,24 @@ async function onStartup() {
             ztoolkit.log("collection already exists", collectionId);
           }
 
-          const items = selectedCollection.getChildItems();
-
-          for (const item of items) {
-            const url = getURLFromItem(item);
-
-            if (url === "") continue;
-
-            const addUrlPromise = client.cards.addUrlToLibrary({
-              body: {
-                url,
-                note: "Added from Zotero.",
-                collectionIds: [collectionId],
-              },
-            });
-
-            const data = cardCache.get(url);
-
-            if (data === undefined) return;
-
-            data.stats.libraryCount += 1;
-
-            // optimistically update UI in a hacky way
-            if (data.status.card === undefined) {
-              data.status.card = { urlInLibrary: true } as any;
-              cardCache.set(url, data);
-              await addUrlPromise;
-              cardCache.revalidate(url);
-            } else {
-              data.status.card!.urlInLibrary = true;
-              cardCache.set(url, data);
-            }
+          ztoolkit.log("saving collection to Semble");
+          const batchedUrls = batchArr(urls, 2);
+          for (const batch of batchedUrls) {
+            await Promise.all(
+              batch.map((url) =>
+                client.cards.addUrlToLibrary({
+                  body: {
+                    url,
+                    collectionIds: [collectionId],
+                  },
+                }),
+              ),
+            );
           }
+          ztoolkit.log("saved collection to Semble");
+
+          ztoolkit.log("revalidating");
+          urls.forEach((url) => cardCache.revalidate(url));
         },
       },
     ],
@@ -364,6 +408,7 @@ async function onStartup() {
             cardCache.set(url, data);
           }
         }
+        Zotero.Notifier.trigger("redraw", "itemtree", []);
       };
 
       span.append(button);
