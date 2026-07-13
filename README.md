@@ -29,4 +29,4 @@ When you first enable the plugin you will be prompted to add your Semble API Key
 
 ## Contributing
 
-Bugs and feature requests can be filed here. Checkout the [docs](/docs/README.md) for the structure of the repo and how to work with it locally. They are also translated to [chinese](/docs/README-zhCN.md) and [french](/docs/README-frFR.md).
+Bugs and feature requests can be filed [here](https://github.com/ChrisShank/zemble/issues). Checkout the [docs](/docs/README.md) for the structure of the repo and how to work with it locally. They are also translated to [chinese](/docs/README-zhCN.md) and [french](/docs/README-frFR.md).
