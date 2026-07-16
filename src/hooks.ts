@@ -130,8 +130,20 @@ function batchArr<T>(arr: T[], size: number): T[][] {
   return batch;
 }
 
-const getURLFromItem = (item: Zotero.Item) =>
-  item.getField("url") || item.getField("DOI");
+const getURLFromItem = (item: Zotero.Item) => {
+  const url = item.getField("url");
+
+  if (url) return url;
+
+  let doi = item.getField("DOI");
+
+  if (!doi) return "";
+
+  if (!doi.startsWith("https")) {
+    doi = `https://doi.org/${doi}`;
+  }
+  return doi;
+};
 
 async function ensureProfilePrefs() {
   const currentApiKey = getPref("apiKey");
