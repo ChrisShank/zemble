@@ -15,9 +15,7 @@ export type FluentMessageId =
   | 'menupopup-label'
   | 'pref-about'
   | 'pref-api-key'
-  | 'pref-enable'
   | 'pref-help'
-  | 'pref-input'
   | 'pref-title'
   | 'prefs-table-detail'
   | 'prefs-table-title'
@@ -25,4 +23,6 @@ export type FluentMessageId =
   | 'startup-begin'
   | 'startup-finish'
   | 'tabpanel-lib-tab-label'
-  | 'tabpanel-reader-tab-label';
+  | 'tabpanel-reader-tab-label'
+  | 'zemble-header'
+  | 'zemble-sidenav';
