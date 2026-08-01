@@ -165,6 +165,23 @@ export class Utils {
   }
 }
 
+export async function createItemByZotero(
+  identifiers: ItemBaseInfo["identifiers"],
+  collections: number[],
+): Promise<Zotero.Item> {
+  const translate = new Zotero.Translate.Search();
+  translate.setIdentifier(identifiers);
+  const translators = await translate.getTranslators();
+  translate.setTranslator(translators);
+  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
+  const items = await translate.translate({
+    libraryID,
+    collections,
+    saveAttachments: true,
+  });
+  return items[0];
+}
+
 // From https://github.com/MuiseDestiny/zotero-reference/blob/bootstrap/src/modules/pdf.ts
 
 type PDFLine = {

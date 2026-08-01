@@ -1,8 +1,30 @@
 import { createSembleClient } from "@semble.so/api";
 import { getPref, setPref } from "../utils/prefs";
-import PDF from "../utils/pdf";
+import PDF, { createItemByZotero } from "../utils/pdf";
 import { initLocale } from "../utils/locale";
 
+/** Mapping Zotero collection to Semble Collection */
+class CollectionMapping {
+  static get(collection: Zotero.Collection) {
+    const persistedCollections = JSON.parse(getPref("collections") || "{}");
+
+    return persistedCollections[collection.id] as string | undefined;
+  }
+
+  static set(collection: Zotero.Collection, id: string) {
+    const persistedCollections = JSON.parse(getPref("collections") || "{}");
+    persistedCollections[collection.id] = id;
+    setPref("collections", JSON.stringify(persistedCollections));
+  }
+
+  static delete(collection: Zotero.Collection) {
+    const persistedCollections = JSON.parse(getPref("collections") || "{}");
+    delete persistedCollections[collection.id];
+    setPref("collections", JSON.stringify(persistedCollections));
+  }
+}
+
+/** Cache fetch requests on they are read, since this is the easiest way to render async data in Zotero. */
 class FetchCache<Data> {
   #redraw = false;
   #flushing = false;
@@ -287,13 +309,7 @@ export class Zemble {
 
             const name = `Zotero - ${selectedCollection.name}`;
 
-            const persistedCollections = JSON.parse(
-              getPref("collections") || "{}",
-            );
-
-            let collectionId = persistedCollections[selectedCollection.id] as
-              | string
-              | undefined;
+            let collectionId = CollectionMapping.get(selectedCollection);
 
             if (collectionId) {
               const r = await this.client.collections.collectionById({
@@ -307,8 +323,7 @@ export class Zemble {
                   collectionId,
                 );
                 collectionId = undefined;
-                delete persistedCollections[selectedCollection.id];
-                setPref("collections", JSON.stringify(persistedCollections));
+                CollectionMapping.delete(selectedCollection);
               }
             }
 
@@ -321,8 +336,7 @@ export class Zemble {
                 },
               });
               collectionId = body.collectionId;
-              persistedCollections[selectedCollection.id] = collectionId;
-              setPref("collections", JSON.stringify(persistedCollections));
+              CollectionMapping.set(selectedCollection, collectionId);
             } else {
               ztoolkit.log("collection already exists", collectionId);
             }
@@ -345,6 +359,99 @@ export class Zemble {
 
             ztoolkit.log("revalidating");
             urls.forEach((url) => this.cardCache.revalidate(url));
+          },
+        },
+        {
+          tag: "menuitem",
+          label: "Sync from Semble collection",
+          isDisabled: () => {
+            const pane = Zotero.getActiveZoteroPane();
+            const selectedCollection = pane.getSelectedCollection();
+
+            if (!selectedCollection) return false;
+            const sembleCollectionId =
+              CollectionMapping.get(selectedCollection);
+            ztoolkit.log("sync collection", sembleCollectionId);
+            return sembleCollectionId === undefined;
+          },
+          commandListener: async () => {
+            const pane = Zotero.getActiveZoteroPane();
+            const selectedCollection = pane.getSelectedCollection();
+
+            if (selectedCollection == null) return;
+
+            ztoolkit.log("Selected Collection: ", selectedCollection);
+
+            const items = selectedCollection.getChildItems();
+
+            const urlToItemsMap = new Map(
+              items.map((i) => [getURLFromItem(i), i]),
+            );
+
+            const collectionId = CollectionMapping.get(selectedCollection);
+
+            if (collectionId === undefined) return;
+
+            const { status, body } =
+              await this.client.collections.collectionById({
+                query: { collectionId },
+              });
+
+            if (status !== 200) {
+              ztoolkit.log("Error fetching collection to sync");
+              return;
+            }
+
+            const itemType = Zotero.ItemTypes.getID("webpage");
+            for (const card of body.urlCards) {
+              ztoolkit.log(card.url, card);
+
+              let item = urlToItemsMap.get(card.url);
+              const {
+                doi: DOI,
+                isbn: ISBN,
+                title,
+                siteName,
+                publishedDate,
+                author,
+                retrievedAt,
+              } = card.cardContent;
+
+              if (item !== undefined) continue;
+
+              if (DOI || ISBN) {
+                try {
+                  item = await createItemByZotero({ DOI, ISBN } as any, [
+                    selectedCollection.id,
+                  ]);
+                } catch (e) {
+                  ztoolkit.log(e);
+
+                  const data: Partial<
+                    Record<_ZoteroTypes.Item.ItemField, string>
+                  > = {
+                    title: title || siteName,
+                    url: card.url,
+                    accessDate: retrievedAt || "CURRENT_TIMESTAMP",
+                    date: publishedDate,
+                    firstCreator: author,
+                    DOI,
+                    ISBN,
+                  };
+                  item = await pane.newItem(itemType, data, null, true);
+                }
+              } else {
+                const data: Partial<
+                  Record<_ZoteroTypes.Item.ItemField, string>
+                > = {
+                  title: title || siteName,
+                  url: card.url,
+                  accessDate: retrievedAt || "CURRENT_TIMESTAMP",
+                  date: publishedDate || "",
+                };
+                item = await pane.newItem(itemType, data, null, true);
+              }
+            }
           },
         },
       ],
