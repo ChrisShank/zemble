@@ -322,6 +322,46 @@ export class Zemble {
       children: [
         {
           tag: "menuitem",
+          label: "Configure Sync",
+          isDisabled: () => {
+            const pane = Zotero.getActiveZoteroPane();
+            const selectedCollection = pane.getSelectedCollection();
+            return !selectedCollection;
+          },
+          commandListener: async () => {
+            const pane = Zotero.getActiveZoteroPane();
+            const selectedCollection = pane.getSelectedCollection();
+            if (!selectedCollection) return;
+
+            let collectionId = CollectionMapping.get(selectedCollection);
+            let value;
+
+            if (collectionId) {
+              const { status, body } =
+                await this.client.collections.collectionById({
+                  query: { collectionId },
+                });
+
+              // Collection was deleted
+              if (status !== 200) {
+                ztoolkit.log(
+                  "Persisted collection does not exist",
+                  collectionId,
+                );
+                collectionId = undefined;
+                CollectionMapping.delete(selectedCollection);
+              } else if (body.uri) {
+                const atURI = new AtUri(body.uri);
+                value = `https://semble.so/profile/${body.author.handle}/collections/${atURI.rkey}`;
+              }
+            }
+            ztoolkit.log("collection URL", value);
+
+            await promptSembleCollection(selectedCollection, value);
+          },
+        },
+        {
+          tag: "menuitem",
           label: "Publish as Semble collection",
           isDisabled: () => {
             const pane = Zotero.getActiveZoteroPane();
@@ -509,46 +549,6 @@ export class Zemble {
                 item = await pane.newItem(itemType, data, null, true);
               }
             }
-          },
-        },
-        {
-          tag: "menuitem",
-          label: "Configure Sync",
-          isDisabled: () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
-            return !selectedCollection;
-          },
-          commandListener: async () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
-            if (!selectedCollection) return;
-
-            let collectionId = CollectionMapping.get(selectedCollection);
-            let value;
-
-            if (collectionId) {
-              const { status, body } =
-                await this.client.collections.collectionById({
-                  query: { collectionId },
-                });
-
-              // Collection was deleted
-              if (status !== 200) {
-                ztoolkit.log(
-                  "Persisted collection does not exist",
-                  collectionId,
-                );
-                collectionId = undefined;
-                CollectionMapping.delete(selectedCollection);
-              } else if (body.uri) {
-                const atURI = new AtUri(body.uri);
-                value = `https://semble.so/profile/${body.author.handle}/collections/${atURI.rkey}`;
-              }
-            }
-            ztoolkit.log("collection URL", value);
-
-            await promptSembleCollection(selectedCollection, value);
           },
         },
       ],
