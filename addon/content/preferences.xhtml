@@ -18,12 +18,12 @@
   <hbox align="center" style="margin-left: 15px; margin-top: 10px">
     <html:label
       for="semble-api-key"
-      data-l10n-id="pref-api-key"
+      data-l10n-id="pref-apiKey"
       style="width: 80px"
     ></html:label>
     <html:input
       type="password"
-      id="semble-api-key"
+      id="semble-apiKey"
       preference="__prefsPrefix__.apiKey"
       placeholder="e.g. sl_abc123..."
       style="flex: 1; margin-left: 10px"
@@ -37,6 +37,53 @@
     </html:input>
   </hbox>
 </groupbox>
+
+<div
+  style="
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    margin-top: 1rem;
+  "
+>
+  <label value="Configure what is being synced to/from Semble. "></label>
+  <div style="display: flex; gap: 5px; margin-left: 15px; margin-top: 10px">
+    <html:input
+      type="checkbox"
+      id="semble-syncTags"
+      preference="__prefsPrefix__.syncTags"
+      style="flex: 1; margin-left: 10px"
+      rows="3"
+      oninput="
+        Zotero.__addonInstance__.hooks.onPrefsEvent('syncTags', {
+          checked: event.target.checked,
+        })
+      "
+    >
+    </html:input>
+    <html:label for="semble-syncTags" data-l10n-id="pref-syncTags"></html:label>
+  </div>
+
+  <div style="display: flex; gap: 5px; margin-left: 15px; margin-top: 10px">
+    <html:input
+      type="checkbox"
+      id="semble-syncConnections"
+      preference="__prefsPrefix__.syncConnections"
+      style="flex: 1; margin-left: 10px"
+      rows="3"
+      oninput="
+        Zotero.__addonInstance__.hooks.onPrefsEvent('syncConnections', {
+          checked: event.target.checked,
+        })
+      "
+    >
+    </html:input>
+    <html:label
+      for="semble-syncConnections"
+      data-l10n-id="pref-syncConnections"
+    ></html:label>
+  </div>
+</div>
 
 <groupbox style="margin-top: 20px">
   <label>

@@ -121,7 +121,7 @@ function batchArr<T>(arr: T[], size: number): T[][] {
   return batch;
 }
 
-const getURLFromItem = (item: Zotero.Item) => {
+function getURLFromItem(item: Zotero.Item) {
   const url = item.getField("url");
 
   if (url) return url;
@@ -134,7 +134,7 @@ const getURLFromItem = (item: Zotero.Item) => {
     doi = `https://doi.org/${doi}`;
   }
   return doi;
-};
+}
 
 export class Zemble {
   static favicons: Record<string, string> = {};
@@ -258,6 +258,22 @@ export class Zemble {
             pane.loadURI(urls);
           },
         },
+        {
+          tag: "menuitem",
+          label: "Save item(s)",
+          isDisabled: () => {
+            const items = ztoolkit.getGlobal("ZoteroPane").getSelectedItems();
+            return items.every((item) => !getURLFromItem(item));
+          },
+          commandListener: async () => {
+            const pane = ztoolkit.getGlobal("ZoteroPane");
+            const selectedItems = pane.getSelectedItems();
+
+            for (const item of selectedItems) {
+              await this.addCardToSemble(item, []);
+            }
+          },
+        },
       ],
     });
   }
@@ -379,17 +395,14 @@ export class Zemble {
             }
 
             ztoolkit.log("saving collection to Semble");
-            const batchedUrls = batchArr(urls, 2);
+
+            const itemsWithURLs = items.filter(
+              (item) => getURLFromItem(item) !== "",
+            );
+            const batchedUrls = batchArr(itemsWithURLs, 2);
             for (const batch of batchedUrls) {
               await Promise.all(
-                batch.map((url) =>
-                  this.client.cards.addUrlToLibrary({
-                    body: {
-                      url,
-                      collectionIds: [collectionId],
-                    },
-                  }),
-                ),
+                batch.map((item) => this.addCardToSemble(item, [collectionId])),
               );
             }
             ztoolkit.log("saved collection to Semble");
@@ -447,7 +460,7 @@ export class Zemble {
               const {
                 doi: DOI,
                 isbn: ISBN,
-                title,
+                title = card.url,
                 siteName,
                 publishedDate,
                 author,
@@ -463,6 +476,13 @@ export class Zemble {
                   ]);
                 } catch (e) {
                   ztoolkit.log(e);
+                  // const i = await pane.addItemFromURL(
+                  //   card.url,
+                  //   "webpage",
+                  //   true,
+                  //   selectedCollection,
+                  // );
+                  // if (i) item = i;
 
                   const data: Partial<
                     Record<_ZoteroTypes.Item.ItemField, string>
@@ -541,8 +561,10 @@ export class Zemble {
       dataKey: "semble-cards",
       label: "Semble Added By",
       htmlLabel: `<span><img src="${this.favicons["64"]}" height="10px" width="9px" style="margin-right: 5px;"/>Added By</span>`,
-      dataProvider: getURLFromItem,
-      renderCell: (index, url = "", column, isFirstColumn, doc) => {
+      dataProvider: (item) => item.id.toString(),
+      renderCell: (index, itemId = "", column, isFirstColumn, doc) => {
+        const item = Zotero.Items.get(itemId);
+        const url = getURLFromItem(item);
         const span = doc.createElement("span");
         span.className = `cell ${column.className} semble`;
         const data = this.cardCache.get(url);
@@ -567,9 +589,7 @@ export class Zemble {
             if (data.status.card) data.status.card.urlInLibrary = false;
             this.cardCache.set(url, data);
           } else {
-            const addUrlPromise = this.client.cards.addUrlToLibrary({
-              body: { url },
-            });
+            const addUrlPromise = this.addCardToSemble(item);
             data.stats.libraryCount += 1;
 
             // optimistically update UI in a hacky way
@@ -758,6 +778,63 @@ export class Zemble {
         ztoolkit.log("section destroy", props);
       },
     });
+  }
+
+  static async addCardToSemble(item: Zotero.Item, collectionIds?: string[]) {
+    const url = getURLFromItem(item);
+
+    let note = "";
+
+    // TODO: parse HTML to plaintext
+    // const syncNotes = true;
+    // if (syncNotes) {
+    //   note += Zotero.Items.get(item.getNotes())
+    //     .map((note) => note.note)
+    //     .join("\n---\n");
+    // }
+
+    if (getPref("syncTags")) {
+      note += item
+        .getTags()
+        .map(({ tag }) => `#${tag}`)
+        .join(" ");
+    }
+
+    await this.client.cards.addUrlToLibrary({
+      body: { url, collectionIds, note },
+    });
+
+    if (getPref("syncConnections")) {
+      const connectionsPromise = item
+        .getRelationsByPredicate("dc:relation")
+        .map((uri) => {
+          const data = Zotero.URI.getURIItemLibraryKey(uri);
+
+          if (!data || !data.key || data.objectType !== "item")
+            return Promise.resolve();
+
+          const id = Zotero.Items.getIDFromLibraryAndKey(
+            data.libraryID,
+            data.key,
+          );
+
+          if (!id) return Promise.resolve();
+
+          const relatedItem = Zotero.Items.get(id);
+          const relateURL = getURLFromItem(relatedItem);
+
+          return this.client.connections.createConnection({
+            body: {
+              targetType: "URL",
+              targetValue: relateURL,
+              sourceType: "URL",
+              sourceValue: url,
+            },
+          });
+        });
+
+      await Promise.allSettled([connectionsPromise]);
+    }
   }
 }
 

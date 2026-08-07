@@ -82,7 +82,7 @@ async function onNotify(
  * @param data event data
  */
 async function onPrefsEvent(type: string, data: { [key: string]: any }) {
-  ztoolkit.log("pref event", type);
+  ztoolkit.log("pref event", type, data);
 
   if (type === "apiKey") {
     Zemble.setAPIKey(data.value);

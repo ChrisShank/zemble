@@ -8,6 +8,8 @@ declare namespace _ZoteroTypes {
   interface Prefs {
     PluginPrefsMap: {
       "apiKey": string;
+      "syncTags": boolean;
+      "syncConnections": boolean;
       "collections": string;
     };
   }
