@@ -380,8 +380,6 @@ export class Zemble {
 
             const urls = items.map(getURLFromItem).filter((url) => url !== "");
 
-            ztoolkit.log("collection urls", urls);
-
             for (const url of urls) {
               const data = this.cardCache.get(url);
 
@@ -397,6 +395,20 @@ export class Zemble {
               }
               this.cardCache.set(url, data);
             }
+
+            const progress = new ztoolkit.ProgressWindow(
+              addon.data.config.addonName,
+              {
+                closeOnClick: false,
+                closeOtherProgressWindows: true,
+              },
+            )
+              .createLine({
+                type: "default",
+                text: `Publishing Zotero collection '${selectedCollection.name}' to Semble.`,
+                progress: 0,
+              })
+              .show();
 
             ztoolkit.log("optimistically update saved items");
 
@@ -439,16 +451,33 @@ export class Zemble {
             const itemsWithURLs = items.filter(
               (item) => getURLFromItem(item) !== "",
             );
+
+            let count = 0;
             const batchedUrls = batchArr(itemsWithURLs, 2);
             for (const batch of batchedUrls) {
-              await Promise.all(
-                batch.map((item) => this.addCardToSemble(item, [collectionId])),
-              );
+              try {
+                await Promise.all(
+                  batch.map((item) =>
+                    this.addCardToSemble(item, [collectionId], false),
+                  ),
+                );
+                count += 1;
+                progress.changeLine({
+                  progress: (count / batchedUrls.length) * 100,
+                });
+                ztoolkit.log("progress", (count / batchedUrls.length) * 100);
+              } catch (e) {
+                ztoolkit.log("error publishing collection", e);
+              }
             }
+
             ztoolkit.log("saved collection to Semble");
 
             ztoolkit.log("revalidating");
+
             urls.forEach((url) => this.cardCache.revalidate(url));
+
+            progress.close();
           },
         },
         {
@@ -461,7 +490,6 @@ export class Zemble {
             if (!selectedCollection) return false;
             const sembleCollectionId =
               CollectionMapping.get(selectedCollection);
-            ztoolkit.log("sync collection", sembleCollectionId);
             return sembleCollectionId === undefined;
           },
           commandListener: async () => {
@@ -481,6 +509,19 @@ export class Zemble {
             const collectionId = CollectionMapping.get(selectedCollection);
 
             if (collectionId === undefined) return;
+
+            const progress = new ztoolkit.ProgressWindow(
+              addon.data.config.addonName,
+              {
+                closeOnClick: false,
+                closeOtherProgressWindows: true,
+              },
+            )
+              .createLine({
+                type: "default",
+                text: `Syncing Zotero collection '${selectedCollection.name}' from Semble collection.`,
+              })
+              .show();
 
             const { status, body } =
               await this.client.collections.collectionById({
@@ -549,6 +590,10 @@ export class Zemble {
                 item = await pane.newItem(itemType, data, null, true);
               }
             }
+
+            progress.changeLine({
+              type: "success",
+            });
           },
         },
       ],
@@ -780,60 +825,92 @@ export class Zemble {
     });
   }
 
-  static async addCardToSemble(item: Zotero.Item, collectionIds?: string[]) {
-    const url = getURLFromItem(item);
+  static async addCardToSemble(
+    item: Zotero.Item,
+    collectionIds?: string[],
+    showProgress = true,
+  ) {
+    let progress;
 
-    let note = "";
-
-    // TODO: parse HTML to plaintext
-    // const syncNotes = true;
-    // if (syncNotes) {
-    //   note += Zotero.Items.get(item.getNotes())
-    //     .map((note) => note.note)
-    //     .join("\n---\n");
-    // }
-
-    if (getPref("syncTags")) {
-      note += item
-        .getTags()
-        .map(({ tag }) => `#${tag}`)
-        .join(" ");
+    if (showProgress) {
+      progress = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
+        closeTime: 5000,
+      })
+        .createLine({
+          type: "success",
+          text: "Saving card to Semble.",
+          progress: 50,
+        })
+        .show();
     }
 
-    await this.client.cards.addUrlToLibrary({
-      body: { url, collectionIds, note },
-    });
+    try {
+      const url = getURLFromItem(item);
 
-    if (getPref("syncConnections")) {
-      const connectionsPromise = item
-        .getRelationsByPredicate("dc:relation")
-        .map((uri) => {
-          const data = Zotero.URI.getURIItemLibraryKey(uri);
+      let note = "";
 
-          if (!data || !data.key || data.objectType !== "item")
-            return Promise.resolve();
+      // TODO: parse HTML to plaintext
+      // const syncNotes = true;
+      // if (syncNotes) {
+      //   note += Zotero.Items.get(item.getNotes())
+      //     .map((note) => note.note)
+      //     .join("\n---\n");
+      // }
 
-          const id = Zotero.Items.getIDFromLibraryAndKey(
-            data.libraryID,
-            data.key,
-          );
+      if (getPref("syncTags")) {
+        note += item
+          .getTags()
+          .map(({ tag }) => `#${tag}`)
+          .join(" ");
+      }
 
-          if (!id) return Promise.resolve();
+      const urlResult = await this.client.cards.addUrlToLibrary({
+        body: { url, collectionIds, note },
+      });
 
-          const relatedItem = Zotero.Items.get(id);
-          const relateURL = getURLFromItem(relatedItem);
+      if (getPref("syncConnections")) {
+        const connectionsPromise = item
+          .getRelationsByPredicate("dc:relation")
+          .map((uri) => {
+            const data = Zotero.URI.getURIItemLibraryKey(uri);
 
-          return this.client.connections.createConnection({
-            body: {
-              targetType: "URL",
-              targetValue: relateURL,
-              sourceType: "URL",
-              sourceValue: url,
-            },
+            if (!data || !data.key || data.objectType !== "item")
+              return Promise.resolve();
+
+            const id = Zotero.Items.getIDFromLibraryAndKey(
+              data.libraryID,
+              data.key,
+            );
+
+            if (!id) return Promise.resolve();
+
+            const relatedItem = Zotero.Items.get(id);
+            const relateURL = getURLFromItem(relatedItem);
+
+            return this.client.connections.createConnection({
+              body: {
+                targetType: "URL",
+                targetValue: relateURL,
+                sourceType: "URL",
+                sourceValue: url,
+              },
+            });
           });
-        });
 
-      await Promise.allSettled([connectionsPromise]);
+        await Promise.allSettled([connectionsPromise]);
+
+        progress?.changeLine({
+          type: "success",
+          text: "Saved card to Semble.",
+          progress: 99,
+        });
+      }
+    } catch (e) {
+      progress?.changeLine({
+        type: "fail",
+        text: "Error saving card to Semble.",
+        progress: 0,
+      });
     }
   }
 }
