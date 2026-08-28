@@ -1,6 +1,6 @@
 import { createSembleClient } from "@semble.so/api";
 import { getPref, setPref } from "../utils/prefs";
-import PDF, { createItemByZotero } from "../utils/pdf";
+import PDF, { createItemByZotero, ItemInfo } from "../utils/pdf";
 import { initLocale } from "../utils/locale";
 import { AtUri } from "@atproto/syntax";
 
@@ -35,6 +35,38 @@ class FetchCache<Data> {
 
   constructor(fetcher: (key: string) => Promise<Data>) {
     this.#fetcher = fetcher;
+  }
+
+  async getAsync(key: string): Promise<Data | undefined> {
+    if (!key) return undefined;
+
+    const data = this.#cache.get(key);
+    // an error fetching data already happened or the data is being fetched
+    if (data === null) return undefined;
+
+    // data has not been loaded yet
+    if (data !== undefined) return data;
+
+    ztoolkit.log("full cache miss", key);
+
+    this.#cache.set(key, null);
+
+    const promise = this.#fetcher(key);
+
+    this.#promiseQueue.set(
+      key,
+      promise.catch((e) => {
+        ztoolkit.log("Error fetching from cache: ", e.message);
+        return null;
+      }),
+    );
+
+    if (!this.#flushing) {
+      this.#flushing = true;
+      setTimeout(this.#refresh, 200);
+    }
+
+    return promise;
   }
 
   get(key: string) {
@@ -135,6 +167,14 @@ function getURLFromItem(item: Zotero.Item) {
   }
   return doi;
 }
+
+function getTextForSaveButton(saved: boolean, count: number) {
+  return saved ? `✓ ${count}` : `+ ${count}`;
+}
+
+type InferCardCache<T> = T extends FetchCache<infer T> ? T : never;
+
+type SembleCard = InferCardCache<typeof Zemble.cardCache>;
 
 export class Zemble {
   static favicons: Record<string, string> = {};
@@ -621,7 +661,7 @@ export class Zemble {
         const cardId = data?.status.card?.id || "";
         const button = doc.createElement("button");
         button.style.margin = "0 auto";
-        button.textContent = saved ? `✓ ${count}` : `+ ${count}`;
+        button.textContent = getTextForSaveButton(saved, count);
         button.onclick = async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -752,6 +792,68 @@ export class Zemble {
   }
 
   static registerItemPanel() {
+    const createRow = (doc: Document, data: SembleCard) => {
+      const url = data.metadata.url;
+      const cardId = data?.status.card?.id || "";
+      const count = data.stats.libraryCount;
+      const saved = data.status.card?.urlInLibrary || false;
+
+      return ztoolkit.UI.createElement(doc, "div", {
+        namespace: "xul",
+        children: [
+          {
+            tag: "div",
+            properties: {
+              textContent: data.metadata.title || "[No Title]",
+            },
+          },
+          {
+            tag: "button",
+            styles: {
+              margin: "0 auto",
+            },
+            properties: {
+              textContent: getTextForSaveButton(saved, count),
+            },
+            listeners: [
+              {
+                type: "click",
+                listener: async (e) => {
+                  if (saved) {
+                    this.client.cards.removeFromLibrary({ body: { cardId } });
+                    data.stats.libraryCount -= 1;
+                    if (data.status.card) data.status.card.urlInLibrary = false;
+                    this.cardCache.set(data.metadata.url, data);
+                    (e.target as HTMLElement).textContent =
+                      getTextForSaveButton(false, count);
+                  } else {
+                    const addUrlPromise = this.client.cards.addUrlToLibrary({
+                      body: { url },
+                    });
+                    data.stats.libraryCount += 1;
+                    (e.target as HTMLElement).textContent =
+                      getTextForSaveButton(true, count);
+
+                    // optimistically update UI in a hacky way
+                    if (data.status.card === undefined) {
+                      data.status.card = { urlInLibrary: true } as any;
+                      this.cardCache.set(url, data);
+                      await addUrlPromise;
+                      this.cardCache.revalidate(url);
+                    } else {
+                      data.status.card!.urlInLibrary = true;
+                      this.cardCache.set(url, data);
+                    }
+                  }
+                  Zotero.Notifier.trigger("redraw", "itemtree", []);
+                },
+              },
+            ],
+          },
+        ],
+      });
+    };
+
     Zotero.ItemPaneManager.registerSection({
       paneID: "zemble-references",
       pluginID: addon.data.config.addonID,
@@ -783,6 +885,7 @@ export class Zemble {
         ztoolkit.log("section async render", props);
         // props.setL10nArgs(`{"count": "${0}"}`);
         const isReader = props.tabType === "reader";
+        const doc = props.body.ownerDocument!;
 
         if (isReader) {
           const reader = await ztoolkit.Reader.getReader();
@@ -793,23 +896,22 @@ export class Zemble {
             const references = await PDF.getReferences(reader);
             ztoolkit.log("references", references);
             props.setL10nArgs(`{"count": "${references.length}"}`);
-            const urls = references.map(
-              (r) =>
-                r.url || `https://doi.org/${r.identifiers.DOI}` || "No URL",
+            const promises = references.map((r) => {
+              const url = r.url || `https://doi.org/${r.identifiers.DOI}`;
+              return this.cardCache.getAsync(url);
+            });
+            const cards = (await Promise.all(promises)).filter(
+              (card) => card !== undefined,
             );
-
-            const doc = props.body.ownerDocument!;
-            props.body.append(
-              ...urls.map((url) => {
-                const el = doc?.createElement("div");
-                el.textContent = url;
-                return el;
-              }),
-            );
+            props.body.textContent = "";
+            const els = cards.map((card, i) => createRow(doc, card));
+            props.body.append(...els);
           } else if (reader.type === "snapshot") {
             // const snapshot = (reader as _ZoteroTypes.ReaderInstance<'snapshot'>)._internalReader._lastView;
             // ztoolkit.log(snapshot);
           }
+          // TODO: Fetch DOI sources https://api.crossref.org/works/${DOI}/transform/application/vnd.citationstyles.csl+json
+          // CKN https://kns.cnki.net/kns8/Brief/GetGridTableHtml
         }
       },
       onItemChange: (props) => {
@@ -893,6 +995,7 @@ export class Zemble {
                 targetValue: relateURL,
                 sourceType: "URL",
                 sourceValue: url,
+                connectionType: "RELATED",
               },
             });
           });

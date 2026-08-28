@@ -31,6 +31,9 @@ export type ItemInfo = ItemBaseInfo & {
   references?: ItemBaseInfo[];
 };
 
+const timeout = (ms: number) =>
+  new Promise<void>((r) => setTimeout(() => r(), ms));
+
 export class Utils {
   static cache: { [key: string]: any } = {};
   static regex = {
@@ -532,16 +535,30 @@ class PDF {
     return lines;
   }
 
+  static async getPDFViewer(
+    reader: _ZoteroTypes.ReaderInstance,
+  ): Promise<_ZoteroTypes.Reader.PDFViewerApplication> {
+    const lastView = reader._internalReader
+      ._lastView as _ZoteroTypes.Reader.PDFView;
+    const iframe = lastView._iframeWindow;
+    if (iframe == null) {
+      await timeout(500);
+      return this.getPDFViewer(reader);
+    }
+
+    const PDFViewerApplication = iframe.PDFViewerApplication;
+    await PDFViewerApplication.pdfLoadingTask?.promise;
+    await PDFViewerApplication.pdfViewer?.pagesPromise;
+    return PDFViewerApplication;
+  }
+
   static async getRefLines(
     reader: _ZoteroTypes.ReaderInstance,
     fromCurrentPage: boolean,
     fullText: boolean = false,
   ) {
-    const PDFViewerApplication = (reader._internalReader._lastView as any)
-      ._iframeWindow.PDFViewerApplication;
-    await PDFViewerApplication.pdfLoadingTask.promise;
-    await PDFViewerApplication.pdfViewer.pagesPromise;
-    const pages = PDFViewerApplication.pdfViewer._pages;
+    const PDFViewerApplication = await this.getPDFViewer(reader);
+    const pages = PDFViewerApplication.pdfViewer!._pages!;
     // skip the pdf with page less than 3
     const pageLines: any = {};
     // read 2 page to remove head and tail
