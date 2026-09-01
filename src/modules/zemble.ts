@@ -3,6 +3,15 @@ import { getPref, setPref } from "../utils/prefs";
 import PDF, { createItemByZotero, ItemInfo } from "../utils/pdf";
 import { initLocale } from "../utils/locale";
 import { AtUri } from "@atproto/syntax";
+import { config, version } from "../../package.json";
+
+type UrlCard = Awaited<
+  ReturnType<
+    ReturnType<typeof createSembleClient>["collections"]["collectionById"]
+  >
+>["body"]["urlCards"][number];
+
+const ZEMBLE_CLIENT = `${config.addonRef}-${version.replaceAll(".", "_web")}`;
 
 /** Mapping Zotero collection to Semble Collection */
 class CollectionMapping {
@@ -180,7 +189,7 @@ export class Zemble {
   static favicons: Record<string, string> = {};
 
   static client: ReturnType<typeof createSembleClient> = createSembleClient({
-    apiKey: "",
+    client: ZEMBLE_CLIENT,
   });
 
   static cardCache = new FetchCache(async (url: string) => {
@@ -226,7 +235,8 @@ export class Zemble {
   static setAPIKey(apiKey: string) {
     this.cardCache.reset();
     this.notesCache.reset();
-    this.client = createSembleClient({ apiKey });
+    ztoolkit.log("client", ZEMBLE_CLIENT);
+    this.client = createSembleClient({ apiKey, client: ZEMBLE_CLIENT });
   }
 
   static registerPreferences() {
@@ -353,6 +363,56 @@ export class Zemble {
 
       CollectionMapping.set(collection, body.id);
       return value;
+    };
+
+    const saveItem = async (
+      card: UrlCard,
+      selectedCollection: Zotero.Collection,
+      pane: _ZoteroTypes.ZoteroPane,
+    ) => {
+      const {
+        doi: DOI,
+        isbn: ISBN,
+        title = card.url,
+        siteName,
+        publishedDate,
+        author,
+        retrievedAt,
+      } = card.cardContent;
+      const doiUrl = "https://doi.org/";
+      const parsedDOI = card.url.startsWith(doiUrl)
+        ? card.url.replace(doiUrl, "")
+        : undefined;
+
+      if (DOI || ISBN || parsedDOI) {
+        try {
+          const item = await createItemByZotero({ DOI: DOI || parsedDOI }, [
+            selectedCollection.id,
+          ]);
+          // sometimes the url will resolve to a different URL
+          item.setField("url", card.url);
+          ztoolkit.log("loaded from DOI", card.url, DOI);
+        } catch (e) {
+          ztoolkit.log("error saving item", e);
+          const data: Partial<Record<_ZoteroTypes.Item.ItemField, string>> = {
+            title: title || siteName,
+            url: card.url,
+            accessDate: retrievedAt || "CURRENT_TIMESTAMP",
+            date: publishedDate || "",
+          };
+          const itemType = Zotero.ItemTypes.getID("webpage");
+          await pane.newItem(itemType, data, null, true);
+        }
+      } else {
+        const data: Partial<Record<_ZoteroTypes.Item.ItemField, string>> = {
+          title: title || siteName,
+          url: card.url,
+          accessDate: retrievedAt || "CURRENT_TIMESTAMP",
+          date: publishedDate || "",
+        };
+        const itemType = Zotero.ItemTypes.getID("webpage");
+        await pane.newItem(itemType, data, null, true);
+      }
     };
 
     ztoolkit.Menu.register("collection", {
@@ -526,8 +586,7 @@ export class Zemble {
           isDisabled: () => {
             const pane = Zotero.getActiveZoteroPane();
             const selectedCollection = pane.getSelectedCollection();
-
-            if (!selectedCollection) return false;
+            if (!selectedCollection) return true;
             const sembleCollectionId =
               CollectionMapping.get(selectedCollection);
             return sembleCollectionId === undefined;
@@ -563,73 +622,34 @@ export class Zemble {
               })
               .show();
 
-            const { status, body } =
-              await this.client.collections.collectionById({
-                query: { collectionId },
+            let page: number | undefined = undefined;
+            let hasMore = true;
+            do {
+              ztoolkit.log("fetching page", page || 1);
+              const { status, body } =
+                await this.client.collections.collectionById({
+                  query: { collectionId, page, limit: 50 },
+                });
+
+              if (status !== 200) {
+                ztoolkit.log("Error fetching collection to sync");
+                return;
+              }
+              page = body.pagination.currentPage + 1;
+              hasMore = body.pagination.hasMore;
+
+              ztoolkit.log(body.urlCards);
+
+              const promises = body.urlCards.map((card) => {
+                const item = urlToItemsMap.get(card.url);
+
+                if (item !== undefined) return Promise.resolve();
+
+                return saveItem(card, selectedCollection, pane);
               });
 
-            if (status !== 200) {
-              ztoolkit.log("Error fetching collection to sync");
-              return;
-            }
-
-            const itemType = Zotero.ItemTypes.getID("webpage");
-            for (const card of body.urlCards) {
-              ztoolkit.log(card.url, card);
-
-              let item = urlToItemsMap.get(card.url);
-              const {
-                doi: DOI,
-                isbn: ISBN,
-                title = card.url,
-                siteName,
-                publishedDate,
-                author,
-                retrievedAt,
-              } = card.cardContent;
-
-              if (item !== undefined) continue;
-
-              if (DOI || ISBN) {
-                try {
-                  item = await createItemByZotero({ DOI, ISBN } as any, [
-                    selectedCollection.id,
-                  ]);
-                } catch (e) {
-                  ztoolkit.log(e);
-                  // const i = await pane.addItemFromURL(
-                  //   card.url,
-                  //   "webpage",
-                  //   true,
-                  //   selectedCollection,
-                  // );
-                  // if (i) item = i;
-
-                  const data: Partial<
-                    Record<_ZoteroTypes.Item.ItemField, string>
-                  > = {
-                    title: title || siteName,
-                    url: card.url,
-                    accessDate: retrievedAt || "CURRENT_TIMESTAMP",
-                    date: publishedDate,
-                    firstCreator: author,
-                    DOI,
-                    ISBN,
-                  };
-                  item = await pane.newItem(itemType, data, null, true);
-                }
-              } else {
-                const data: Partial<
-                  Record<_ZoteroTypes.Item.ItemField, string>
-                > = {
-                  title: title || siteName,
-                  url: card.url,
-                  accessDate: retrievedAt || "CURRENT_TIMESTAMP",
-                  date: publishedDate || "",
-                };
-                item = await pane.newItem(itemType, data, null, true);
-              }
-            }
+              await Promise.allSettled(promises);
+            } while (hasMore);
 
             progress.changeLine({
               type: "success",

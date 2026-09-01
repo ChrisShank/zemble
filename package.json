@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@atproto/syntax": "^0.7.2",
-    "@semble.so/api": "^0.0.3",
+    "@semble.so/api": "^0.0.6",
     "lru-cache": "^11.5.1",
     "zotero-plugin-toolkit": "^5.1.0-beta.13"
   },
