@@ -5,11 +5,13 @@ import { initLocale } from "../utils/locale";
 import { AtUri } from "@atproto/syntax";
 import { config, version } from "../../package.json";
 
-type UrlCard = Awaited<
+type Collection = Awaited<
   ReturnType<
     ReturnType<typeof createSembleClient>["collections"]["collectionById"]
   >
->["body"]["urlCards"][number];
+>["body"];
+
+type CollectionUrlCard = Collection["urlCards"][number];
 
 const ZEMBLE_CLIENT = `${config.addonRef}-${version.replaceAll(".", "_web")}`;
 
@@ -235,7 +237,6 @@ export class Zemble {
   static setAPIKey(apiKey: string) {
     this.cardCache.reset();
     this.notesCache.reset();
-    ztoolkit.log("client", ZEMBLE_CLIENT);
     this.client = createSembleClient({ apiKey, client: ZEMBLE_CLIENT });
   }
 
@@ -346,7 +347,6 @@ export class Zemble {
       // Prompt was cancelled!
       if (!result) return value;
 
-      ztoolkit.log(input.value);
       const re = /https:\/\/semble.so\/profile\/(.*)\/collections\/(.*)/;
       const match = re.exec(input.value);
 
@@ -366,7 +366,7 @@ export class Zemble {
     };
 
     const saveItem = async (
-      card: UrlCard,
+      card: CollectionUrlCard,
       selectedCollection: Zotero.Collection,
       pane: _ZoteroTypes.ZoteroPane,
     ) => {
@@ -379,14 +379,18 @@ export class Zemble {
         author,
         retrievedAt,
       } = card.cardContent;
+
       const doiUrl = "https://doi.org/";
       const parsedDOI = card.url.startsWith(doiUrl)
         ? card.url.replace(doiUrl, "")
         : undefined;
 
+      let item: Zotero.Item;
+      const itemType = Zotero.ItemTypes.getID("webpage");
+
       if (DOI || ISBN || parsedDOI) {
         try {
-          const item = await createItemByZotero({ DOI: DOI || parsedDOI }, [
+          item = await createItemByZotero({ DOI: DOI || parsedDOI }, [
             selectedCollection.id,
           ]);
           // sometimes the url will resolve to a different URL
@@ -400,8 +404,7 @@ export class Zemble {
             accessDate: retrievedAt || "CURRENT_TIMESTAMP",
             date: publishedDate || "",
           };
-          const itemType = Zotero.ItemTypes.getID("webpage");
-          await pane.newItem(itemType, data, null, true);
+          item = await pane.newItem(itemType, data, null, true);
         }
       } else {
         const data: Partial<Record<_ZoteroTypes.Item.ItemField, string>> = {
@@ -410,8 +413,11 @@ export class Zemble {
           accessDate: retrievedAt || "CURRENT_TIMESTAMP",
           date: publishedDate || "",
         };
-        const itemType = Zotero.ItemTypes.getID("webpage");
-        await pane.newItem(itemType, data, null, true);
+        item = await pane.newItem(itemType, data, null, true);
+      }
+
+      if (item) {
+        item.setField("extra", `Semble user: ${card.author.id}`);
       }
     };
 
@@ -548,9 +554,15 @@ export class Zemble {
 
             ztoolkit.log("saving collection to Semble");
 
-            const itemsWithURLs = items.filter(
-              (item) => getURLFromItem(item) !== "",
-            );
+            const itemsWithURLs = items.filter((item) => {
+              const url = getURLFromItem(item);
+              const extra = item.getField("extra");
+              const createdByZemble =
+                extra && extra.includes("Semble user: did:");
+              return url && !createdByZemble;
+            });
+
+            ztoolkit.log("items to save", items.length, itemsWithURLs.length);
 
             let count = 0;
             const batchedUrls = batchArr(itemsWithURLs, 2);
@@ -632,7 +644,11 @@ export class Zemble {
                 });
 
               if (status !== 200) {
-                ztoolkit.log("Error fetching collection to sync");
+                ztoolkit.log("Error fetching collection to publish");
+                progress.changeLine({
+                  type: "error",
+                  text: "Error publishing to Semble collection. Check if you have permission to add to cards to it. ",
+                });
                 return;
               }
               page = body.pagination.currentPage + 1;
@@ -952,18 +968,16 @@ export class Zemble {
     collectionIds?: string[],
     showProgress = true,
   ) {
-    let progress;
+    const progress = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
+      closeTime: 5000,
+    }).createLine({
+      type: "success",
+      text: "Saving card to Semble.",
+      progress: 50,
+    });
 
     if (showProgress) {
-      progress = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
-        closeTime: 5000,
-      })
-        .createLine({
-          type: "success",
-          text: "Saving card to Semble.",
-          progress: 50,
-        })
-        .show();
+      progress.show();
     }
 
     try {
@@ -989,6 +1003,21 @@ export class Zemble {
       const urlResult = await this.client.cards.addUrlToLibrary({
         body: { url, collectionIds, note },
       });
+
+      if (urlResult.status !== 200) {
+        const text =
+          collectionIds && collectionIds.length > 0
+            ? " Check if you have access to modify this collection."
+            : "";
+        progress
+          .changeLine({
+            type: "fail",
+            text: "Error saving card to Semble." + text,
+            progress: 0,
+          })
+          .show();
+        return;
+      }
 
       if (getPref("syncConnections")) {
         const connectionsPromise = item
@@ -1022,18 +1051,20 @@ export class Zemble {
 
         await Promise.allSettled([connectionsPromise]);
 
-        progress?.changeLine({
+        progress.changeLine({
           type: "success",
           text: "Saved card to Semble.",
           progress: 99,
         });
       }
     } catch (e) {
-      progress?.changeLine({
-        type: "fail",
-        text: "Error saving card to Semble.",
-        progress: 0,
-      });
+      progress
+        .changeLine({
+          type: "fail",
+          text: "Error saving card to Semble.",
+          progress: 0,
+        })
+        .show();
     }
   }
 }
