@@ -321,7 +321,7 @@ export class Zemble {
             const selectedItems = pane.getSelectedItems();
 
             for (const item of selectedItems) {
-              await this.addCardToSemble(item, []);
+              await this.addCardToSemble(item);
             }
           },
         },
@@ -367,6 +367,7 @@ export class Zemble {
 
     const saveItem = async (
       card: CollectionUrlCard,
+      sembleCollection: Collection,
       selectedCollection: Zotero.Collection,
       pane: _ZoteroTypes.ZoteroPane,
     ) => {
@@ -417,7 +418,7 @@ export class Zemble {
       }
 
       if (item) {
-        item.setField("extra", `Semble user: ${card.author.id}`);
+        item.setField("extra", `Semble collection: ${sembleCollection.id}`);
       }
     };
 
@@ -558,7 +559,7 @@ export class Zemble {
               const url = getURLFromItem(item);
               const extra = item.getField("extra");
               const createdByZemble =
-                extra && extra.includes("Semble user: did:");
+                extra && extra.includes(`Semble collection: ${collectionId}`);
               return url && !createdByZemble;
             });
 
@@ -570,7 +571,7 @@ export class Zemble {
               try {
                 await Promise.all(
                   batch.map((item) =>
-                    this.addCardToSemble(item, [collectionId], false),
+                    this.addCardToSemble(item, collectionId, false),
                   ),
                 );
                 count += 1;
@@ -647,7 +648,7 @@ export class Zemble {
                 ztoolkit.log("Error fetching collection to publish");
                 progress.changeLine({
                   type: "error",
-                  text: "Error publishing to Semble collection. Check if you have permission to add to cards to it. ",
+                  text: "Error syncing to Semble collection. ",
                 });
                 return;
               }
@@ -656,12 +657,12 @@ export class Zemble {
 
               ztoolkit.log(body.urlCards);
 
-              const promises = body.urlCards.map((card) => {
+              const promises = body.urlCards.map(async (card) => {
                 const item = urlToItemsMap.get(card.url);
 
                 if (item !== undefined) return Promise.resolve();
 
-                return saveItem(card, selectedCollection, pane);
+                await saveItem(card, body, selectedCollection, pane);
               });
 
               await Promise.allSettled(promises);
@@ -965,9 +966,10 @@ export class Zemble {
 
   static async addCardToSemble(
     item: Zotero.Item,
-    collectionIds?: string[],
+    collectionId?: string,
     showProgress = true,
   ) {
+    const collectionIds = collectionId ? [collectionId] : undefined;
     const progress = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
       closeTime: 5000,
     }).createLine({
@@ -1056,6 +1058,14 @@ export class Zemble {
           text: "Saved card to Semble.",
           progress: 99,
         });
+
+        if (collectionId) {
+          const extra = item.getField("extra") || "";
+          item.setField(
+            "extra",
+            extra + `\nSemble collection: ${collectionId}`,
+          );
+        }
       }
     } catch (e) {
       progress
