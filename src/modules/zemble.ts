@@ -190,6 +190,8 @@ type SembleCard = InferCardCache<typeof Zemble.cardCache>;
 export class Zemble {
   static favicons: Record<string, string> = {};
 
+  static hasAPIKey = false;
+
   static client: ReturnType<typeof createSembleClient> = createSembleClient({
     client: ZEMBLE_CLIENT,
   });
@@ -200,15 +202,14 @@ export class Zemble {
       this.client.cards.urlLibraryStatus({ query: { url } }),
     ]);
 
-    if (urlStatus.status !== 200)
-      throw new Error(`Error fetching card status: ${urlStatus.status}`);
+    // if no metadata than ignore this, but if there is no API key then just return then stats
     if (urlMetadata.status !== 200)
       throw new Error(`Error fetching card metadata: ${urlMetadata.status}`);
 
     return {
       metadata: urlMetadata.body.metadata,
       stats: urlMetadata.body.stats!,
-      status: urlStatus.body,
+      status: urlStatus.status === 200 ? urlStatus.body : {},
     };
   });
 
@@ -238,6 +239,7 @@ export class Zemble {
     this.cardCache.reset();
     this.notesCache.reset();
     this.client = createSembleClient({ apiKey, client: ZEMBLE_CLIENT });
+    this.hasAPIKey = !!apiKey;
   }
 
   static registerPreferences() {
@@ -319,6 +321,8 @@ export class Zemble {
           commandListener: async () => {
             const pane = ztoolkit.getGlobal("ZoteroPane");
             const selectedItems = pane.getSelectedItems();
+
+            await this.ensureAPIKey();
 
             for (const item of selectedItems) {
               await this.addCardToSemble(item);
@@ -541,6 +545,7 @@ export class Zemble {
 
             if (!collectionId) {
               ztoolkit.log("create collection");
+              await this.ensureAPIKey();
               const { body } = await this.client.collections.createCollection({
                 body: {
                   name,
@@ -696,39 +701,54 @@ export class Zemble {
         const count = data?.stats?.libraryCount || 0;
         const saved = data?.status.card?.urlInLibrary || false;
         const cardId = data?.status.card?.id || "";
-        const button = doc.createElement("button");
-        button.style.margin = "0 auto";
-        button.textContent = getTextForSaveButton(saved, count);
-        button.onclick = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
 
-          const data = this.cardCache.get(url)!;
+        if (this.hasAPIKey) {
+          const button = doc.createElement("button");
+          button.style.margin = "0 auto";
+          button.textContent = getTextForSaveButton(saved, count);
+          button.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
 
-          if (saved) {
-            this.client.cards.removeFromLibrary({ body: { cardId } });
-            data.stats.libraryCount -= 1;
-            if (data.status.card) data.status.card.urlInLibrary = false;
-            this.cardCache.set(url, data);
-          } else {
-            const addUrlPromise = this.addCardToSemble(item);
-            data.stats.libraryCount += 1;
+            const data = this.cardCache.get(url)!;
 
-            // optimistically update UI in a hacky way
-            if (data.status.card === undefined) {
-              data.status.card = { urlInLibrary: true } as any;
+            // Should be safe to assume an API key exists
+            if (saved) {
+              this.client.cards.removeFromLibrary({ body: { cardId } });
+              data.stats.libraryCount -= 1;
+              if (data.status.card) data.status.card.urlInLibrary = false;
               this.cardCache.set(url, data);
-              await addUrlPromise;
-              this.cardCache.revalidate(url);
             } else {
-              data.status.card!.urlInLibrary = true;
-              this.cardCache.set(url, data);
-            }
-          }
-          Zotero.Notifier.trigger("redraw", "itemtree", []);
-        };
+              const addUrlPromise = this.addCardToSemble(item);
+              data.stats.libraryCount += 1;
 
-        span.append(button);
+              // optimistically update UI in a hacky way
+              if (data.status.card === undefined) {
+                data.status.card = { urlInLibrary: true } as any;
+                this.cardCache.set(url, data);
+                await addUrlPromise;
+                this.cardCache.revalidate(url);
+              } else {
+                data.status.card!.urlInLibrary = true;
+                this.cardCache.set(url, data);
+              }
+            }
+            Zotero.Notifier.trigger("redraw", "itemtree", []);
+          };
+
+          span.append(button);
+        } else if (count !== undefined && count !== 0) {
+          const a = doc.createElement("a");
+          a.textContent = count.toString();
+          a.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            ztoolkit
+              .getGlobal("ZoteroPane")
+              .loadURI([`https://semble.so/url?id=${url}`]);
+          };
+          span.appendChild(a);
+        }
 
         return span;
       },
@@ -856,6 +876,7 @@ export class Zemble {
               {
                 type: "click",
                 listener: async (e) => {
+                  this.ensureAPIKey();
                   if (saved) {
                     this.client.cards.removeFromLibrary({ body: { cardId } });
                     data.stats.libraryCount -= 1;
@@ -1077,26 +1098,18 @@ export class Zemble {
         .show();
     }
   }
-}
 
-/**
- async function ensureProfilePrefs() {
-  const currentApiKey = getPref("apiKey");
+  static async ensureAPIKey() {
+    if (this.hasAPIKey) return;
 
-  if (currentApiKey) {
-    Zemble.setAPIKey(currentApiKey);
-    return;
-  }
+    const win = Zotero.getMainWindow() as mozIDOMWindowProxy;
+    const prompts = Services.prompt as any;
 
-  const win = Zotero.getMainWindow() as mozIDOMWindowProxy;
-  const prompts = Services.prompt as any;
-
-  if (!currentApiKey) {
     const apiKeyInput = { value: "" };
     const result = prompts.promptPassword(
       win,
       "Zemble API Key",
-      "Paste your API key to connect your Semble library, create one here: \n\nhttps://semble.so/settings/api-keys",
+      "Paste your API key to connect to your Semble library, create one here: \n\nhttps://semble.so/settings/api-keys",
       apiKeyInput,
       "",
       { value: false },
@@ -1113,4 +1126,3 @@ export class Zemble {
     }
   }
 }
- */
