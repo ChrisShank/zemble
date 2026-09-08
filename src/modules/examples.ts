@@ -498,6 +498,8 @@ export class PromptExampleFactory {
           if (ids.length > 0) {
             ids.forEach((id: number) => {
               const item = Zotero.Items.get(id);
+
+              if (!item) return;
               const title = item.getField("title");
               const ele = ztoolkit.UI.createElement(window.document!, "div", {
                 namespace: "html",
