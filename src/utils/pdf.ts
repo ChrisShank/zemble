@@ -176,7 +176,7 @@ export async function createItemByZotero(
   translate.setIdentifier(identifiers);
   const translators = await translate.getTranslators();
   translate.setTranslator(translators);
-  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
+  const libraryID = Zotero.getActiveZoteroPane()?.getSelectedLibraryIDs()[0];
   const items = await translate.translate({
     libraryID,
     collections,

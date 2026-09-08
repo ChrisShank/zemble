@@ -435,13 +435,11 @@ export class Zemble {
           tag: "menuitem",
           label: "Configure Sync",
           isDisabled: () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane?.getSelectedCollection();
+            const selectedCollection = getSelectedCollection();
             return !selectedCollection;
           },
           commandListener: async () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane?.getSelectedCollection();
+            const selectedCollection = getSelectedCollection();
             if (!selectedCollection) return;
 
             let collectionId = CollectionMapping.get(selectedCollection);
@@ -475,13 +473,11 @@ export class Zemble {
           tag: "menuitem",
           label: "Publish as Semble collection",
           isDisabled: () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane?.getSelectedCollection();
+            const selectedCollection = getSelectedCollection();
             return !selectedCollection;
           },
           commandListener: async () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane?.getSelectedCollection();
+            const selectedCollection = getSelectedCollection();
 
             if (selectedCollection == null) return;
 
@@ -603,8 +599,7 @@ export class Zemble {
           tag: "menuitem",
           label: "Sync from Semble collection",
           isDisabled: () => {
-            const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane?.getSelectedCollection();
+            const selectedCollection = getSelectedCollection();
             if (!selectedCollection) return true;
             const sembleCollectionId =
               CollectionMapping.get(selectedCollection);
@@ -615,7 +610,7 @@ export class Zemble {
 
             if (pane == null) return;
 
-            const selectedCollection = pane.getSelectedCollection();
+            const selectedCollection = getSelectedCollection();
 
             if (selectedCollection == null) return;
 
@@ -1135,5 +1130,17 @@ export class Zemble {
       setPref("apiKey", newApiKey);
       Zemble.setAPIKey(newApiKey);
     }
+  }
+}
+
+function getSelectedCollection(): Zotero.Collection | undefined {
+  const pane = Zotero.getActiveZoteroPane();
+
+  if (pane === null) return;
+
+  try {
+    return pane.getSelectedCollections?.()[0] || pane.getSelectedCollection?.();
+  } catch {
+    return undefined;
   }
 }
