@@ -436,12 +436,12 @@ export class Zemble {
           label: "Configure Sync",
           isDisabled: () => {
             const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
+            const selectedCollection = pane?.getSelectedCollection();
             return !selectedCollection;
           },
           commandListener: async () => {
             const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
+            const selectedCollection = pane?.getSelectedCollection();
             if (!selectedCollection) return;
 
             let collectionId = CollectionMapping.get(selectedCollection);
@@ -476,12 +476,12 @@ export class Zemble {
           label: "Publish as Semble collection",
           isDisabled: () => {
             const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
+            const selectedCollection = pane?.getSelectedCollection();
             return !selectedCollection;
           },
           commandListener: async () => {
             const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
+            const selectedCollection = pane?.getSelectedCollection();
 
             if (selectedCollection == null) return;
 
@@ -604,7 +604,7 @@ export class Zemble {
           label: "Sync from Semble collection",
           isDisabled: () => {
             const pane = Zotero.getActiveZoteroPane();
-            const selectedCollection = pane.getSelectedCollection();
+            const selectedCollection = pane?.getSelectedCollection();
             if (!selectedCollection) return true;
             const sembleCollectionId =
               CollectionMapping.get(selectedCollection);
@@ -612,6 +612,9 @@ export class Zemble {
           },
           commandListener: async () => {
             const pane = Zotero.getActiveZoteroPane();
+
+            if (pane == null) return;
+
             const selectedCollection = pane.getSelectedCollection();
 
             if (selectedCollection == null) return;
@@ -692,9 +695,13 @@ export class Zemble {
       dataProvider: (item) => item.id.toString(),
       renderCell: (index, itemId = "", column, isFirstColumn, doc) => {
         const item = Zotero.Items.get(itemId);
-        const url = getURLFromItem(item);
+
         const span = doc.createElement("span");
         span.className = `cell ${column.className} semble`;
+
+        if (!item) return span;
+
+        const url = getURLFromItem(item);
         const data = this.cardCache.get(url);
 
         if (url === "" || data === undefined) return span;
@@ -1057,9 +1064,12 @@ export class Zemble {
               data.key,
             );
 
-            if (!id) return Promise.resolve();
+            if (!id) return;
 
             const relatedItem = Zotero.Items.get(id);
+
+            if (!relatedItem) return;
+
             const relateURL = getURLFromItem(relatedItem);
 
             return this.client.connections.createConnection({
