@@ -12,7 +12,7 @@
 
 ## API Key
 
-When you first enable the plugin you will be prompted to add your Semble API Key. If you don't already have one, make one [here](https://semble.so/settings/api-keys). You can change this at any time by going to `Preferences -> Zemble`.
+By default the plugin is readonly, so columns, sync collection to Zotero, and preview info in item panel. To save items/publish Zotero collection make an API key [here](https://semble.so/settings/api-keys) and paste it into the Zemble settings. You can change this at any time by going to `Preferences -> Zemble`.
 
 ## Functionality
 
@@ -25,7 +25,10 @@ When you first enable the plugin you will be prompted to add your Semble API Key
 - Right clicking on items. If multiple items are selected then they will each load in a separate tab.
   - Open items in Semble, if they have a URL or DOI.
 - Right click on a collection.
+  - Configure Sync - Set the URL to the Semble collection you want to sync the Zotero collection with
   - Save to Semble - Creates a new collection on Semble and saves all of the items in that Zotero Collection to Semble. If done multiple times it will update the same collection with new cards.
+  - Sync from Semble - Pull in changes from the Semble collection.
+    - Note: this currently does not delete any items that you've added to _your_ local Zotero collection.
 
 ## Contributing
 

@@ -543,9 +543,10 @@ export class Zemble {
               }
             }
 
+            await this.ensureAPIKey();
+
             if (!collectionId) {
               ztoolkit.log("create collection");
-              await this.ensureAPIKey();
               const { body } = await this.client.collections.createCollection({
                 body: {
                   name,
@@ -650,7 +651,7 @@ export class Zemble {
                 });
 
               if (status !== 200) {
-                ztoolkit.log("Error fetching collection to publish");
+                ztoolkit.log("Error fetching collection to sync");
                 progress.changeLine({
                   type: "error",
                   text: "Error syncing to Semble collection. ",
