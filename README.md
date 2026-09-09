@@ -29,6 +29,8 @@ By default the plugin is readonly, so columns, sync collection to Zotero, and pr
   - Save to Semble - Creates a new collection on Semble and saves all of the items in that Zotero Collection to Semble. If done multiple times it will update the same collection with new cards.
   - Sync from Semble - Pull in changes from the Semble collection.
     - Note: this currently does not delete any items that you've added to _your_ local Zotero collection.
+- Publish item tags and connections to Semble
+  - Enable settings to publish tags and connections from Zotero to Semble
 
 ## Contributing
 

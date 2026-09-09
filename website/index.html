@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="text-scale" content="scale" />
+    <title>Zemble – A Zotero plugin for Semble</title>
+
+    <link rel="stylesheet" href="/styles.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Recursive:wght@300..1000&display=swap"
+      rel="stylesheet"
+    />
+
+    <meta property="og:title" content="Name of Page" />
+    <meta
+      name="description"
+      content="A Zotero plugin for Semble, turning your reference manager into a social bookmarking environment."
+    />
+    <meta
+      property="og:description"
+      content="A Zotero plugin for Semble, turning your reference manager into a social bookmarking environment."
+    />
+
+    <!-- <link
+      rel="icon"
+      type="image/svg+xml"
+      href="https://example.com/favicon.svg"
+    /> -->
+
+    <!-- <meta property="og:image" content="https://example.com/embed-image.webp" />
+    <meta property="og:image:alt" content="A picture of something." />
+    <meta property="og:image:type" content="image/webp" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" /> -->
+
+    <!-- <meta property="og:url" content="https://example.com/page" /> -->
+    <meta property="og:site_name" content="Zemble" />
+
+    <meta name="author" content="Chris Shank" />
+  </head>
+
+  <body>
+    <header><h1>Zemble</h1></header>
+    <main>
+      <article>
+        <blockquote>
+          <p>
+            A Zotero plugin for integrating
+            <a href="https://semble.so" rel="nofollow">Semble</a>, the social
+            knowledge network for researchers.
+          </p>
+        </blockquote>
+
+        <h2>Installation</h2>
+
+        <ol>
+          <li>
+            Go to the
+            <a href="https://github.com/ChrisShank/zemble/releases/latest"
+              >latest release</a
+            >
+            of the plugin.
+          </li>
+          <li>
+            Click on the <code>zemble.xpi</code> file to download it to your
+            computer.
+          </li>
+          <li>
+            In Zotero, click
+            <code
+              >Tools &gt; Plugins &gt; "..." menu &gt; "Open Plugin from
+              File"</code
+            >
+            and open the <code>zemble.xpi</code> file that you just downloaded.
+          </li>
+        </ol>
+        <video
+          src="https://github.com/user-attachments/assets/6b431fb2-c104-4034-bb7c-6cd0b0ca2e79"
+          data-canonical-src="https://github.com/user-attachments/assets/6b431fb2-c104-4034-bb7c-6cd0b0ca2e79"
+          controls="controls"
+          muted="muted"
+          style="max-height: 640px; min-height: 200px"
+        ></video>
+
+        <h2>API Key</h2>
+        <p>
+          By default the plugin is readonly, so columns, sync collection to
+          Zotero, and preview info in item panel. To save items/publish Zotero
+          collection make an API key
+          <a href="https://semble.so/settings/api-keys" rel="nofollow">here</a>
+          and paste it into the Zemble settings. You can change this at any time
+          by going to <code>Preferences -&gt; Zemble</code>.
+        </p>
+        <h2>Functionality</h2>
+
+        <ul>
+          <li>
+            Columns to see how others have interacted with Zotero items. They
+            are all links to the corresponding views in Semble.
+            <ul>
+              <li>
+                Added By - how many people has this collection been saved by and
+                have you saved it
+                <ul>
+                  <li>Clicking on this will save/remove the item to semble.</li>
+                </ul>
+              </li>
+              <li>
+                Collections - how many collections has this item been saved to.
+              </li>
+              <li>Connections - how many connections does this item have.</li>
+              <li>Notes - how many notes does this item have.</li>
+            </ul>
+          </li>
+          <li>
+            Right clicking on items. If multiple items are selected then they
+            will each load in a separate tab.
+            <ul>
+              <li>Open items in Semble, if they have a URL or DOI.</li>
+            </ul>
+          </li>
+          <li>
+            Right click on a collection.
+            <ul>
+              <li>
+                Configure Sync - Set the URL to the Semble collection you want
+                to sync the Zotero collection with
+              </li>
+              <li>
+                Save to Semble - Creates a new collection on Semble and saves
+                all of the items in that Zotero Collection to Semble. If done
+                multiple times it will update the same collection with new
+                cards.
+              </li>
+              <li>
+                Sync from Semble - Pull in changes from the Semble collection.
+                <ul>
+                  <li>
+                    Note: this currently does not delete any items that you've
+                    added to <em>your</em> local Zotero collection.
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+        <h2>Contributing</h2>
+
+        <p>
+          Bugs and feature requests can be filed
+          <a href="https://github.com/ChrisShank/zemble/issues">here</a>.
+          Checkout the
+          <a href="/ChrisShank/zemble/blob/main/docs/README.md">docs</a> for the
+          structure of the repo and how to work with it locally. They are also
+          translated to
+          <a href="/ChrisShank/zemble/blob/main/docs/README-zhCN.md">chinese</a>
+          and
+          <a href="/ChrisShank/zemble/blob/main/docs/README-frFR.md">french</a>.
+        </p>
+      </article>
+    </main>
+    <footer id="footer"></footer>
+  </body>
+</html>
