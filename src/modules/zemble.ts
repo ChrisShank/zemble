@@ -13,7 +13,7 @@ type Collection = Awaited<
 
 type CollectionUrlCard = Collection["urlCards"][number];
 
-const ZEMBLE_CLIENT = `${config.addonRef}-${version.replaceAll(".", "_web")}`;
+const ZEMBLE_CLIENT = `${config.addonRef}-${version.replaceAll(".", "_")}`;
 
 /** Mapping Zotero collection to Semble Collection */
 class CollectionMapping {

@@ -6,16 +6,15 @@
     <meta name="text-scale" content="scale" />
     <title>Zemble – A Zotero plugin for Semble</title>
 
-    <link rel="stylesheet" href="/styles.css" />
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Recursive:wght@300..1000&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@-15..0,300..1000,0..1,0..1,0..1&display=swap"
       rel="stylesheet"
     />
+    <link rel="icon" href="favicon.png" />
 
-    <meta property="og:title" content="Name of Page" />
+    <meta property="og:title" content="Zemble – A Zotero plugin for Semble" />
     <meta
       name="description"
       content="A Zotero plugin for Semble, turning your reference manager into a social bookmarking environment."
@@ -24,12 +23,6 @@
       property="og:description"
       content="A Zotero plugin for Semble, turning your reference manager into a social bookmarking environment."
     />
-
-    <!-- <link
-      rel="icon"
-      type="image/svg+xml"
-      href="https://example.com/favicon.svg"
-    /> -->
 
     <!-- <meta property="og:image" content="https://example.com/embed-image.webp" />
     <meta property="og:image:alt" content="A picture of something." />
@@ -41,128 +34,177 @@
     <meta property="og:site_name" content="Zemble" />
 
     <meta name="author" content="Chris Shank" />
+
+    <style>
+      body {
+        font-family: "Recursive", sans-serif;
+        font-optical-sizing: auto;
+        font-style: normal;
+        font-variation-settings:
+          "slnt" 0,
+          "CASL" 1,
+          "CRSV" 0,
+          "MONO" 1;
+      }
+
+      .prose {
+        color: #111621 !important;
+      }
+
+      i {
+        font-variation-settings: "slnt" -15;
+      }
+
+      code {
+        background-color: oklch(0.86 0.01 0);
+        border-radius: 0.25em;
+        padding: 0.25em 0.5em;
+        font-variation-settings: "slnt" 0,
+          "CASL" 0,
+          "CRSV" 0,
+          "MONO" 1;;
+
+        &::after, &::before {
+          content: "" !important;
+        }
+      }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@tailwindcss/typography@0.5.0/dist/typography.min.css"
+    />
   </head>
 
-  <body>
-    <header><h1>Zemble</h1></header>
+  <body class="prose m-auto bg-gray-100">
+    <header class="text-center">
+      <h1 class="pt-32 flex justify-center gap-4">
+        Zemble
+        <img
+          class="w-8 !m-0 aspect-square overflow-hidden"
+          src="favicon.png"
+        />
+      </h1>
+
+      <p class="px-12">
+        A Zotero plugin for <a href="https://semble.so" rel="nofollow">Semble</a>, contextualize your Zotero references within the wider academic community and easily share your references with others.
+      </p>
+
+      <div class="flex justify-center gap-4">
+        <a href="#install">Install</a>
+        <a href="#features">Features</a>
+      </div>
+    </header>
     <main>
       <article>
-        <blockquote>
+        <section>
+          <h2 id="install">Installation</h2>
+
+          <ol>
+            <li>
+              Check to make sure Zotero is at a minimum
+              <a href="https://www.zotero.org/blog/zotero-10/">version 10</a>.
+            </li>
+            <li>
+              Download the latest Zemble Plugin
+              <a
+                href="https://github.com/ChrisShank/zemble/releases/download/v0.0.10/zemble.xpi"
+                download
+                >here</a
+              >.
+              <span class="!text-gray-600">
+                Or check out
+                <a href="https://github.com/ChrisShank/zemble/releases"
+                  >previous releases</a
+                >
+                and download the <code>zemble.xpi</code> file.
+              </span>
+            </li>
+            <li>
+              In Zotero, click
+              <code
+                >Tools &gt; Plugins &gt; "..." menu &gt; "Open Plugin from
+                File"</code
+              >
+              and open the <code>zemble.xpi</code> file that you just
+              downloaded.
+            </li>
+          </ol>
+
+          <h2>Signing In</h2>
           <p>
-            A Zotero plugin for integrating
-            <a href="https://semble.so" rel="nofollow">Semble</a>, the social
-            knowledge network for researchers.
+            By default Zemble requires no account. You will be able to see
+            columns of how other people are interacting with papers, sync
+            collection from Semble to Zotero, and preview additional info in
+            item panel. 
           </p>
-        </blockquote>
-
-        <h2>Installation</h2>
-
-        <ol>
-          <li>
-            Go to the
-            <a href="https://github.com/ChrisShank/zemble/releases/latest"
-              >latest release</a
-            >
-            of the plugin.
-          </li>
-          <li>
-            Click on the <code>zemble.xpi</code> file to download it to your
-            computer.
-          </li>
-          <li>
-            In Zotero, click
-            <code
-              >Tools &gt; Plugins &gt; "..." menu &gt; "Open Plugin from
-              File"</code
-            >
-            and open the <code>zemble.xpi</code> file that you just downloaded.
-          </li>
-        </ol>
-        <video
-          src="https://github.com/user-attachments/assets/6b431fb2-c104-4034-bb7c-6cd0b0ca2e79"
-          data-canonical-src="https://github.com/user-attachments/assets/6b431fb2-c104-4034-bb7c-6cd0b0ca2e79"
-          controls="controls"
-          muted="muted"
-          style="max-height: 640px; min-height: 200px"
-        ></video>
-
-        <h2>API Key</h2>
-        <p>
-          By default the plugin is readonly, so columns, sync collection to
-          Zotero, and preview info in item panel. To save items/publish Zotero
-          collection make an API key
-          <a href="https://semble.so/settings/api-keys" rel="nofollow">here</a>
-          and paste it into the Zemble settings. You can change this at any time
-          by going to <code>Preferences -&gt; Zemble</code>.
-        </p>
-        <h2>Functionality</h2>
-
-        <ul>
-          <li>
-            Columns to see how others have interacted with Zotero items. They
-            are all links to the corresponding views in Semble.
+          <p>If you want to share papers or Zotero collections on Semble, you will need to have an account on Semble and get an API key.
             <ul>
-              <li>
-                Added By - how many people has this collection been saved by and
-                have you saved it
-                <ul>
-                  <li>Clicking on this will save/remove the item to semble.</li>
-                </ul>
-              </li>
-              <li>
-                Collections - how many collections has this item been saved to.
-              </li>
-              <li>Connections - how many connections does this item have.</li>
-              <li>Notes - how many notes does this item have.</li>
+              <li>If you already have a <a href="https://bsky.app">Bluesky</a> account you can log into Semble with it, otherwise create a new account.</li>
+              <li>After logging in, generate an API key <a href="https://semble.so/settings/api-keys">here</a>.</li>
+              <li>Store that API key in a safe place, then go to <code>Zotero &gt; Preferences &gt; Zemble</code> and paste it into the API key setting.</li>
             </ul>
-          </li>
-          <li>
-            Right clicking on items. If multiple items are selected then they
-            will each load in a separate tab.
-            <ul>
-              <li>Open items in Semble, if they have a URL or DOI.</li>
-            </ul>
-          </li>
-          <li>
-            Right click on a collection.
-            <ul>
-              <li>
-                Configure Sync - Set the URL to the Semble collection you want
-                to sync the Zotero collection with
-              </li>
-              <li>
-                Save to Semble - Creates a new collection on Semble and saves
-                all of the items in that Zotero Collection to Semble. If done
-                multiple times it will update the same collection with new
-                cards.
-              </li>
-              <li>
-                Sync from Semble - Pull in changes from the Semble collection.
-                <ul>
-                  <li>
-                    Note: this currently does not delete any items that you've
-                    added to <em>your</em> local Zotero collection.
-                  </li>
-                </ul>
-              </li>
-            </ul>
-          </li>
-        </ul>
-        <h2>Contributing</h2>
+          </p>
+        </section>
 
-        <p>
-          Bugs and feature requests can be filed
-          <a href="https://github.com/ChrisShank/zemble/issues">here</a>.
-          Checkout the
-          <a href="/ChrisShank/zemble/blob/main/docs/README.md">docs</a> for the
-          structure of the repo and how to work with it locally. They are also
-          translated to
-          <a href="/ChrisShank/zemble/blob/main/docs/README-zhCN.md">chinese</a>
-          and
-          <a href="/ChrisShank/zemble/blob/main/docs/README-frFR.md">french</a>.
-        </p>
+        <section>
+          <h2 id="features">Features</h2>
+          <p>It's important to be aware of that Semble operates on links, so it only works with references that have a URL or DOI.</p>
+          <ul>
+            <li>
+              Add columns to see how others have interacted with your references. Each column links to more detailed views in Semble.
+              <img src="columns.png" class="rounded-lg shadow-md w-full" alt />
+              <ul>
+                <li>
+                  <code>Added By</code> - how many people have saved this item. When logged in, you will see a button indicating whether you've saved this reference to Semble.
+                </li>
+                <li>
+                  <code>Collections</code> - how many collections have others saved this reference too.
+                </li>
+                <li><code>Connections</code> - how many connections have others made with this reference.</li>
+                <li><code>Notes</code> - how many notes have others made about this reference.</li>
+              </ul>
+            </li>
+            
+            <li>
+              Right clicking on items will let you open or save those items in Semble, this works when multiple items are selected.
+              <img src="right-click-item.png" class="rounded-lg shadow-md w-full" alt />
+            </li>
+
+            <li>
+              Zotero collections can by synced to/from Semble, this makes it easy to turn your references into a link (Semble collection) you can easily share with others. They can then easily pull that Semble collection into Zotero to integrate it with their own references. 
+              
+              <img src="collections.png" class="rounded-lg shadow-md w-full" alt />
+
+              <ul>
+                <li>
+                  <code>Configure Sync</code> - Set the URL to the Semble collection you want to sync the Zotero collection with.
+                </li>
+                <li>
+                  <code>Publish as Semble Collection</code> - Creates a new collection on Semble and save all of the items in that Zotero Collection to Semble. If done multiple times it will update the same collection with new cards.
+                </li>
+                <li>
+                  <code>Sync from Semble Collection</code> - Pull in changes from the Semble collection. This currently does not delete any items that you've added to <i>your</i> local Zotero collection.
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Resources</h2>
+          <ul>
+            <li>Semble is part of the <a href="https://atproto.science">AT Science</a> community that is building alternative publishing, knowledge sharing, and institutions on the open web.</li>
+            <li>There are many other great Zotero plugins including <a href="https://github.com/scitedotai/scite-zotero-plugin">Scite</a>, <a href="https://github.com/PubPeerFoundation/pubpeer_zotero_plugin">PeerPub</a>, and <a href="https://github.com/MuiseDestiny/zotero-reference">References</a>.</li>
+          </ul>
+        </section>
       </article>
     </main>
-    <footer id="footer"></footer>
+
+    <footer class="!my-16 flex gap-8 justify-center">
+      <a href="https://github.com/ChrisShank/zemble">Source code</a>
+      <a href="https://github.com/ChrisShank/zemble/issues">Bugs/feature requests</a>
+    </footer>
   </body>
 </html>
